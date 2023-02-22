@@ -1,21 +1,11 @@
-val ktor_version: String by project
-val kotlin_version: String by project
-val logback_version: String by project
-val prometeus_version: String by project
-val experiment_version: String by project
-
 plugins {
     application
-    kotlin("jvm") version "1.6.21"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.6.21"
+    kotlin("jvm") version "1.8.10"
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
 }
-
-group = "com.amplitude"
-version = "0.0.1"
 
 application {
     mainClass.set("com.amplitude.ApplicationKt")
-
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }
@@ -26,18 +16,28 @@ repositories {
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
 }
 
-dependencies {
-    implementation("com.amplitude:experiment-jvm-server:1.0.0-beta.2")
-    implementation("com.amplitude:evaluation-serialization:0.0.2")
+// Defined in gradle.properties
+val ktorVersion: String by project
+val kotlinVersion: String by project
+val logbackVersion: String by project
+val prometheusVersion: String by project
+val serializationVersion: String by project
+val experimentSdkVersion: String by project
+val experimentEvaluationVersion: String by project
 
-    implementation("io.ktor:ktor-server-call-logging-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktor_version")
-    implementation("io.micrometer:micrometer-registry-prometheus:$prometeus_version")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktor_version")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
-    implementation("ch.qos.logback:logback-classic:$logback_version")
-    testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
+
+dependencies {
+    implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
+    implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
+
+    implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
+    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
+    implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
