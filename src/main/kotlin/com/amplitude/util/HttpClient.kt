@@ -8,7 +8,6 @@ class HttpErrorResponseException(
     val statusCode: HttpStatusCode,
 ) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}")
 
-
 data class RetryConfig(
     val times: Int = 8,
     val initialDelayMillis: Long = 100,
@@ -40,7 +39,6 @@ suspend fun retry(
         } catch (e: Exception) {
             onFailure(e)
             error = e
-
         }
         delay(currentDelay)
         currentDelay = (currentDelay * config.factor).toLong().coerceAtMost(config.maxDelay)

@@ -3,8 +3,8 @@ package com.amplitude
 import com.amplitude.cohort.CohortApiV3
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.deployment.DeploymentApiV0
-import com.amplitude.deployment.DeploymentManager
 import com.amplitude.deployment.DeploymentConfiguration
+import com.amplitude.deployment.DeploymentManager
 import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
@@ -26,7 +26,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 
 const val DEFAULT_HOST = "0.0.0.0"
 const val DEFAULT_PORT = 3546
@@ -35,7 +34,6 @@ fun main() {
 
     val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
     val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
-
 
     val deploymentConfiguration = DeploymentConfiguration()
     val deploymentApi = DeploymentApiV0()
@@ -76,7 +74,7 @@ fun main() {
                 try {
                     deploymentApi.getFlagConfigs(deployment)
                 } catch (e: HttpErrorResponseException) {
-                    when(e.statusCode.value) {
+                    when (e.statusCode.value) {
                         in 400..499 -> call.respond(e.statusCode)
                         else -> call.respond(HttpStatusCode.ServiceUnavailable)
                     }

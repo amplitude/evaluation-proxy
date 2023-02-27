@@ -3,10 +3,7 @@ package com.amplitude.deployment
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
