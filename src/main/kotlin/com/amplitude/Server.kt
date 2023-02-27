@@ -14,12 +14,15 @@ import com.amplitude.util.stringEnv
 import com.amplitude.util.toSerial
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.*
 import io.ktor.server.application.call
+import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
 import io.ktor.server.engine.ShutDownUrl
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -59,11 +62,20 @@ fun main() {
         install(ContentNegotiation) {
             json()
         }
-        install(ShutDownUrl.ApplicationCallPlugin) {
-            shutDownUrl = "/shutdown"
-            exitCodeSupplier = { 0 }
-        }
+        // Custom shutdown plugin
+        install(createApplicationPlugin("shutdown") {
+            val plugin = ShutDownUrl("/shutdown") { 0 }
+            onCall { call ->
+                if (call.request.uri == plugin.url) {
+                    deploymentManager.stop()
+                    plugin.doShutdown(call)
+                }
+            }
+        })
         routing {
+            get("/api/v1/deployments") {
+                call.respond(deploymentStorage.getDeployments())
+            }
             put("/api/v1/deployments/{deployment}") {
                 val deployment = this.call.parameters["deployment"]
                 if (deployment.isNullOrEmpty() || !deployment.startsWith("server-")) {

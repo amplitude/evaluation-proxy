@@ -26,6 +26,7 @@ class DeploymentApiV0 : DeploymentApi {
     private val client = HttpClient(OkHttp)
 
     override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig> {
+        log.debug("getFlagConfigs: start - deploymentKey=$deploymentKey")
         val response = retry(onFailure = { e -> log.info("Get flag configs failed: $e") }) {
             client.get("https://api.lab.amplitude.com/sdk/rules") {
                 headers {
@@ -35,6 +36,8 @@ class DeploymentApiV0 : DeploymentApi {
             }
         }
         val body = json.decodeFromString<List<SerialFlagConfig>>(response.body())
-        return body.map { it.convert() }
+        return body.map { it.convert() }.also {
+            log.debug("getFlagConfigs: end - deploymentKey=$deploymentKey")
+        }
     }
 }
