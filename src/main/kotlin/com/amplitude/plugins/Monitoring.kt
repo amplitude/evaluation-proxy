@@ -18,7 +18,6 @@ import io.ktor.server.routing.*
  *  - Values: `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`
  */
 fun Application.configureLogging() {
-
     val logLevel = try {
         Level.valueOf(stringEnv("EVALUATION_LOG_LEVEL") ?: "INFO")
     } catch (_: Exception) {

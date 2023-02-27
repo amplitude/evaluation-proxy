@@ -28,16 +28,20 @@ val experimentEvaluationVersion: String by project
 
 dependencies {
     implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
+    implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
 
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
-    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
+
+    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
+
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
