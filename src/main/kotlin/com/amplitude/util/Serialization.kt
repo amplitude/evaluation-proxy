@@ -52,7 +52,7 @@ internal fun Operator.toSerial(): SerialOperator {
     return SerialOperator.valueOf(this.toString())
 }
 internal fun EvaluationMode.toSerial(): SerialEvaluationMode {
-    return SerialEvaluationMode.valueOf(this.value)
+    return SerialEvaluationMode.valueOf(this.toString())
 }
 
 internal fun FlagConfig.toSerial(): SerialFlagConfig {

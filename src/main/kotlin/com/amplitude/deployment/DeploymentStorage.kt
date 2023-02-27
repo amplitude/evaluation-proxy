@@ -1,6 +1,7 @@
 package com.amplitude.deployment
 
 import com.amplitude.experiment.evaluation.FlagConfig
+import com.amplitude.util.getCohortIds
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -19,6 +20,7 @@ interface DeploymentStorage {
     suspend fun removeDeployment(deploymentKey: String)
     suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>?
     suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>)
+    suspend fun getCohortIds(deploymentKey: String): Set<String>?
 }
 
 class InMemoryDeploymentStorage(
@@ -62,6 +64,12 @@ class InMemoryDeploymentStorage(
     override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>) {
         lock.withLock {
             deploymentStorage[deploymentKey] = flagConfigs
+        }
+    }
+
+    override suspend fun getCohortIds(deploymentKey: String): Set<String>? {
+        return lock.withLock {
+            deploymentStorage[deploymentKey]?.getCohortIds()
         }
     }
 }

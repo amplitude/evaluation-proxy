@@ -1,16 +1,16 @@
 package com.amplitude
 
 import com.amplitude.cohort.CohortApiV3
-import com.amplitude.cohort.CohortLoader
-import com.amplitude.cohort.CohortLoaderConfiguration
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.deployment.DeploymentApiV0
 import com.amplitude.deployment.DeploymentManager
-import com.amplitude.deployment.DeploymentManagerConfiguration
+import com.amplitude.deployment.DeploymentConfiguration
 import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
+import com.amplitude.util.HttpErrorResponseException
 import com.amplitude.util.getCohortIds
+import com.amplitude.util.stringEnv
 import com.amplitude.util.toSerial
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -26,28 +26,29 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 
 const val DEFAULT_HOST = "0.0.0.0"
 const val DEFAULT_PORT = 3546
 
 fun main() {
-    val cohortConfiguration = CohortLoaderConfiguration()
-    val cohortApi = CohortApiV3(apiKey = "", secretKey = "")
-    val cohortStorage = InMemoryCohortStorage()
-    val cohortLoader = CohortLoader(
-        cohortConfiguration,
-        cohortApi,
-        cohortStorage,
-    )
 
-    val deploymentConfiguration = DeploymentManagerConfiguration()
+    val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
+    val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
+
+
+    val deploymentConfiguration = DeploymentConfiguration()
     val deploymentApi = DeploymentApiV0()
     val deploymentStorage = InMemoryDeploymentStorage()
+    val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
+    val cohortStorage = InMemoryCohortStorage()
+
     val deploymentManager = DeploymentManager(
         deploymentConfiguration,
         deploymentApi,
         deploymentStorage,
-        cohortLoader,
+        cohortApi,
+        cohortStorage
     )
 
     runBlocking {
@@ -71,7 +72,18 @@ fun main() {
                     call.respond(status = HttpStatusCode.BadRequest, "Invalid deployment")
                     return@put
                 }
+                // Validate deployment key with amplitude
+                try {
+                    deploymentApi.getFlagConfigs(deployment)
+                } catch (e: HttpErrorResponseException) {
+                    when(e.statusCode.value) {
+                        in 400..499 -> call.respond(e.statusCode)
+                        else -> call.respond(HttpStatusCode.ServiceUnavailable)
+                    }
+                    return@put
+                }
                 deploymentStorage.putDeployment(deployment)
+                call.respond(HttpStatusCode.OK)
             }
             delete("/api/v1/deployments/{deployment}") {
                 val deployment = this.call.parameters["deployment"]
@@ -80,6 +92,7 @@ fun main() {
                     return@delete
                 }
                 deploymentStorage.removeDeployment(deployment)
+                call.respond(HttpStatusCode.OK)
             }
             get("/sdk/v1/deployments/{deployment}/flags") {
                 val deployment = this.call.parameters["deployment"]
@@ -87,7 +100,11 @@ fun main() {
                     call.respond(status = HttpStatusCode.BadRequest, "Invalid deployment")
                     return@get
                 }
-                val flagConfigs = deploymentStorage.getFlagConfigs(deployment) ?: listOf()
+                val flagConfigs = deploymentStorage.getFlagConfigs(deployment)
+                if (flagConfigs == null) {
+                    call.respond(status = HttpStatusCode.NotFound, "Unknown deployment")
+                    return@get
+                }
                 call.respond(flagConfigs.map { it.toSerial() })
             }
             get("/sdk/v1/deployments/{deployment}/users/{userId}/cohorts") {
@@ -101,7 +118,7 @@ fun main() {
                     call.respond(status = HttpStatusCode.BadRequest, "Invalid user ID")
                     return@get
                 }
-                val cohortIds = deploymentStorage.getFlagConfigs(deployment)?.getCohortIds()
+                val cohortIds = deploymentStorage.getCohortIds(deployment)
                 if (cohortIds == null) {
                     call.respond(status = HttpStatusCode.NotFound, "Unknown deployment")
                     return@get

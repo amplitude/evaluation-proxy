@@ -1,29 +1,34 @@
 package com.amplitude.cohort
 
+import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-data class CohortLoaderConfiguration(
-    val maxCohortSize: Int = Int.MAX_VALUE,
-)
+interface ICohortLoader {
+    suspend fun loadCohorts(cohortIds: Set<String>)
+}
 
 class CohortLoader(
-    @Volatile var configuration: CohortLoaderConfiguration,
+    @Volatile var maxCohortSize: Int,
     private val cohortApi: CohortApi,
     private val cohortStorage: CohortStorage,
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob())
-    private val cohortDownloadJobsMutex = Mutex()
-    private val cohortDownloadJobs = mutableMapOf<String, Job>()
+    companion object {
+        val log by logger()
+    }
+    private val jobsMutex = Mutex()
+    private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun loadCohorts(cohortIds: Set<String>) {
+    suspend fun loadCohorts(cohortIds: Set<String>) = coroutineScope {
+        log.debug("loadCohorts: start - cohortIds=$cohortIds")
+
         // Get cohort descriptions from storage and network.
-        // TODO handle api failure
         val networkCohortDescriptions = cohortApi.getCohortDescriptions()
 
         // Filter cohorts received from network. Removes cohorts which are:
@@ -31,25 +36,23 @@ class CohortLoader(
         //   2. Larger than the max size.
         //   3. Are equal to what has been downloaded already.
         val cohorts = networkCohortDescriptions.filter { networkCohortDescription ->
-            // TODO handle storage failure
             val storageDescription = cohortStorage.getCohortDescription(networkCohortDescription.id)
             cohortIds.contains(networkCohortDescription.id) &&
-                networkCohortDescription.size <= configuration.maxCohortSize &&
+                networkCohortDescription.size <= maxCohortSize &&
                 networkCohortDescription.lastComputed > (storageDescription?.lastComputed ?: -1)
         }
 
         // Download and store each cohort if a download job has not already been started.
         for (cohort in cohorts) {
-            cohortDownloadJobsMutex.withLock {
-                cohortDownloadJobs.getOrPut(cohort.id) {
-                    scope.launch {
-                        // TODO handle api failure
+            jobsMutex.withLock {
+                jobs.getOrPut(cohort.id) {
+                    launch {
                         val cohortMembers = cohortApi.getCohortMembers(cohort)
-                        // TODO handle storage failure
                         cohortStorage.putCohort(cohort, cohortMembers)
                     }
                 }
             }.join()
         }
+        log.debug("loadCohorts: end - cohortIds=$cohortIds")
     }
 }
