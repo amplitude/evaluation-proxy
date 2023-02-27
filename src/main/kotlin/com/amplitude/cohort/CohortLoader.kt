@@ -33,9 +33,9 @@ class CohortLoader(
         val cohorts = networkCohortDescriptions.filter { networkCohortDescription ->
             // TODO handle storage failure
             val storageDescription = cohortStorage.getCohortDescription(networkCohortDescription.id)
-            cohortIds.contains(networkCohortDescription.id)
-                && networkCohortDescription.size <= configuration.maxCohortSize
-                && networkCohortDescription.lastComputed > (storageDescription?.lastComputed ?: -1)
+            cohortIds.contains(networkCohortDescription.id) &&
+                networkCohortDescription.size <= configuration.maxCohortSize &&
+                networkCohortDescription.lastComputed > (storageDescription?.lastComputed ?: -1)
         }
 
         // Download and store each cohort if a download job has not already been started.

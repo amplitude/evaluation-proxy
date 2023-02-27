@@ -6,15 +6,15 @@ import kotlinx.coroutines.delay
 
 class HttpErrorResponseException(
     val statusCode: HttpStatusCode,
-) : Exception("HTTP error response: code=${statusCode}, message=${statusCode.description}")
+) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}")
 
 suspend fun retry(
     times: Int = 8,
     initialDelayMillis: Long = 100,
     maxDelay: Long = 10000,
     factor: Double = 2.0,
-    block: suspend () -> HttpResponse): HttpResponse
-{
+    block: suspend () -> HttpResponse
+): HttpResponse {
     var currentDelay = initialDelayMillis
     var error: Exception? = null
     for (i in 0..times) {

@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.EmptyCoroutineContext
-
 import kotlin.test.Test
 
 class Test {
@@ -35,7 +34,5 @@ class Test {
                 println(it)
             }
         }.join()
-
     }
-
 }

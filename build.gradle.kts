@@ -2,6 +2,7 @@ plugins {
     application
     kotlin("jvm") version "1.8.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
+    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 application {
@@ -24,7 +25,6 @@ val prometheusVersion: String by project
 val serializationVersion: String by project
 val experimentSdkVersion: String by project
 val experimentEvaluationVersion: String by project
-
 
 dependencies {
     implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
