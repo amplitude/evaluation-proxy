@@ -7,10 +7,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-interface ICohortLoader {
-    suspend fun loadCohorts(cohortIds: Set<String>)
-}
-
 class CohortLoader(
     @Volatile var maxCohortSize: Int,
     private val cohortApi: CohortApi,
@@ -30,7 +26,7 @@ class CohortLoader(
         val networkCohortDescriptions = cohortApi.getCohortDescriptions()
 
         // Filter cohorts received from network. Removes cohorts which are:
-        //   1. Not request for management by this function.
+        //   1. Not requested for management by this function.
         //   2. Larger than the max size.
         //   3. Are equal to what has been downloaded already.
         val cohorts = networkCohortDescriptions.filter { networkCohortDescription ->
@@ -47,6 +43,7 @@ class CohortLoader(
                     launch {
                         val cohortMembers = cohortApi.getCohortMembers(cohort)
                         cohortStorage.putCohort(cohort, cohortMembers)
+                        jobsMutex.withLock { jobs.remove(cohort.id) }
                     }
                 }
             }.join()
