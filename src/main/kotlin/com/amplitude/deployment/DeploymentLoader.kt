@@ -35,6 +35,7 @@ class DeploymentLoader(
                         cohortLoader.loadCohorts(cohortIds)
                         deploymentStorage.putFlagConfigs(deploymentKey, networkFlagConfigs)
                     }
+                    jobs.remove(deploymentKey)
                 }
             }
         }.join()

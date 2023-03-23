@@ -2,19 +2,17 @@ package com.amplitude
 
 import com.amplitude.cohort.CohortApiV3
 import com.amplitude.cohort.InMemoryCohortStorage
-import com.amplitude.deployment.DeploymentApiV0
+import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.DeploymentConfiguration
 import com.amplitude.deployment.DeploymentManager
 import com.amplitude.deployment.InMemoryDeploymentStorage
+import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.HttpErrorResponseException
-import com.amplitude.util.getCohortIds
 import com.amplitude.util.stringEnv
-import com.amplitude.util.toSerial
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.application.*
 import io.ktor.server.application.call
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
@@ -30,6 +28,8 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.runBlocking
 
+const val VERSION = "0.0.0"
+
 const val DEFAULT_HOST = "0.0.0.0"
 const val DEFAULT_PORT = 3546
 
@@ -39,7 +39,7 @@ fun main() {
     val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
 
     val deploymentConfiguration = DeploymentConfiguration()
-    val deploymentApi = DeploymentApiV0()
+    val deploymentApi = DeploymentApiV1()
     val deploymentStorage = InMemoryDeploymentStorage()
     val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
     val cohortStorage = InMemoryCohortStorage()
@@ -55,6 +55,10 @@ fun main() {
     runBlocking {
         deploymentManager.start()
     }
+    runBlocking {
+        deploymentStorage.putDeployment("server-qz35UwzJ5akieoAdIgzM4m9MIiOLXLoz")
+    }
+
 
     embeddedServer(Netty, port = DEFAULT_PORT, host = DEFAULT_HOST) {
         configureLogging()
@@ -115,7 +119,7 @@ fun main() {
                     call.respond(status = HttpStatusCode.NotFound, "Unknown deployment")
                     return@get
                 }
-                call.respond(flagConfigs.map { it.toSerial() })
+                call.respond(flagConfigs.map { SerialFlagConfig(it) })
             }
             get("/sdk/v1/deployments/{deployment}/users/{userId}/cohorts") {
                 val deployment = this.call.parameters["deployment"]

@@ -27,7 +27,7 @@ val experimentSdkVersion: String by project
 val experimentEvaluationVersion: String by project
 
 dependencies {
-    implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
+    // implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
 

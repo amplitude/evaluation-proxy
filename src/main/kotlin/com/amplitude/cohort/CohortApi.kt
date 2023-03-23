@@ -76,6 +76,6 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
         }
         val body = json.decodeFromString<GetCohortMembersResponse>(response.body())
         return body.userIds.filterNotNull().toSet()
-            .also { log.debug("getCohortDescriptions: end - resultSize=${it.size}") }
+            .also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
     }
 }

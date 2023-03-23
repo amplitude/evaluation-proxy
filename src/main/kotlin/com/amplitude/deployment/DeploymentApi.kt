@@ -1,5 +1,6 @@
 package com.amplitude.deployment
 
+import com.amplitude.VERSION
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.util.json
@@ -10,14 +11,13 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
-import io.ktor.client.request.parameter
 import kotlinx.serialization.decodeFromString
 
 interface DeploymentApi {
     suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>
 }
 
-class DeploymentApiV0 : DeploymentApi {
+class DeploymentApiV1 : DeploymentApi {
 
     companion object {
         val log by logger()
@@ -28,11 +28,11 @@ class DeploymentApiV0 : DeploymentApi {
     override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig> {
         log.debug("getFlagConfigs: start - deploymentKey=$deploymentKey")
         val response = retry(onFailure = { e -> log.info("Get flag configs failed: $e") }) {
-            client.get("https://api.lab.amplitude.com/sdk/rules") {
+            client.get("https://api.lab.amplitude.com/sdk/v1/flags") {
                 headers {
                     set("Authorization", "Api-Key $deploymentKey")
+                    set("X-Amp-Exp-Library", "experiment-local-proxy/$VERSION")
                 }
-                parameter("eval_mode", "local")
             }
         }
         val body = json.decodeFromString<List<SerialFlagConfig>>(response.body())
