@@ -17,18 +17,9 @@ import org.slf4j.event.Level
 
 /**
  * Install the logging plugin and sets the level for logging each call.
- *
- *  - Env: `EVALUATION_LOG_LEVEL`
- *  - Values: `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`
  */
 fun Application.configureLogging() {
-    val logLevel = try {
-        Level.valueOf(stringEnv("EVALUATION_LOG_LEVEL") ?: "INFO")
-    } catch (_: Exception) {
-        Level.INFO
-    }
     install(CallLogging) {
-        level = logLevel
         filter { call -> call.request.path().startsWith("/") }
     }
 }
@@ -39,7 +30,7 @@ fun Application.configureLogging() {
  *  - Value: true, false
  */
 fun Application.configureMetrics() {
-    if (booleanEnv("EVALUATION_METRICS")) {
+    if (booleanEnv("AMPLITUDE_METRICS")) {
         val metricsRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
         install(MicrometerMetrics) {
             metricName = "evaluation.http.server.requests"

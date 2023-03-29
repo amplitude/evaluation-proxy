@@ -40,6 +40,7 @@ class DeploymentManager(
                 refresh(deployments)
             }
         }
+        refresh(deploymentStorage.getDeployments())
     }
 
     // TODO call on server shutdown

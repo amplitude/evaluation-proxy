@@ -1,12 +1,13 @@
 plugins {
     application
+    id("io.ktor.plugin") version "2.2.4"
     kotlin("jvm") version "1.8.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
     id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 application {
-    mainClass.set("com.amplitude.ApplicationKt")
+    mainClass.set("com.amplitude.ServerKt")
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }

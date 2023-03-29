@@ -39,15 +39,13 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import java.util.Base64
 
-const val VERSION = "0.0.0"
-
-const val DEFAULT_HOST = "0.0.0.0"
-const val DEFAULT_PORT = 3546
+const val VERSION = "0.1.0"
 
 fun main() {
 
     val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
     val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
+    val baseDeploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
 
     val engine = EvaluationEngineImpl()
 
@@ -66,29 +64,30 @@ fun main() {
     )
 
     runBlocking {
+        if (baseDeploymentKey != null) {
+            deploymentStorage.putDeployment(baseDeploymentKey)
+        }
         deploymentManager.start()
     }
-    runBlocking {
-        deploymentStorage.putDeployment("server-qz35UwzJ5akieoAdIgzM4m9MIiOLXLoz")
-    }
 
-
-    embeddedServer(Netty, port = DEFAULT_PORT, host = DEFAULT_HOST) {
+    embeddedServer(Netty, port = 3546, host = "0.0.0.0") {
         configureLogging()
         configureMetrics()
         install(ContentNegotiation) {
             json()
         }
         // Custom shutdown plugin
-        install(createApplicationPlugin("shutdown") {
-            val plugin = ShutDownUrl("/shutdown") { 0 }
-            onCall { call ->
-                if (call.request.uri == plugin.url) {
-                    deploymentManager.stop()
-                    plugin.doShutdown(call)
+        install(
+            createApplicationPlugin("shutdown") {
+                val plugin = ShutDownUrl("/shutdown") { 0 }
+                onCall { call ->
+                    if (call.request.uri == plugin.url) {
+                        deploymentManager.stop()
+                        plugin.doShutdown(call)
+                    }
                 }
             }
-        })
+        )
         routing {
 
             get("/api/v1/deployments") {
@@ -278,7 +277,7 @@ private fun ApplicationRequest.getApiKey(): String? {
     if (deploymentKey == null || !deploymentKey.startsWith("Api-Key", ignoreCase = true)) {
         return null
     }
-    return deploymentKey
+    return deploymentKey.substring("Api-Key ".length)
 }
 
 /**
@@ -349,4 +348,3 @@ private fun ApplicationRequest.getUserFromQuery(): SkylabUser {
     }
     return user
 }
-
