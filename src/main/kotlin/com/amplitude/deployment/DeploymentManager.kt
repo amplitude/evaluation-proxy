@@ -81,6 +81,7 @@ class DeploymentManager(
         deploymentRunners[deploymentKey] = deploymentRunner
         log.debug("addDeployment: end - deploymentKey=$deploymentKey")
     }
+
     private suspend fun removeDeployment(deploymentKey: String) {
         log.debug("removeDeployment: start - deploymentKey=$deploymentKey")
         deploymentRunners.remove(deploymentKey)?.stop()

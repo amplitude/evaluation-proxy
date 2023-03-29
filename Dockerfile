@@ -3,7 +3,7 @@ COPY --chown=gradle:gradle . /home/gradle/src
 WORKDIR /home/gradle/src
 RUN gradle buildFatJar --no-daemon
 
-FROM openjdk:11
+FROM amazoncorretto:11-alpine
 EXPOSE 3546:3546
 RUN mkdir /app
 COPY --from=build /home/gradle/src/build/libs/*-all.jar /app/experiment-local-proxy.jar
