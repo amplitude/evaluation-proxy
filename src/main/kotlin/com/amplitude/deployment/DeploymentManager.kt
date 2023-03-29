@@ -43,7 +43,6 @@ class DeploymentManager(
         refresh(deploymentStorage.getDeployments())
     }
 
-    // TODO call on server shutdown
     suspend fun stop() {
         log.debug("stop")
         lock.withLock {
