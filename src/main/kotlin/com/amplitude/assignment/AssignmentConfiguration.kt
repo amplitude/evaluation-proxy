@@ -13,7 +13,6 @@ const val DEFAULT_EVENT_UPLOAD_THRESHOLD = 100
 const val DEFAULT_EVENT_UPLOAD_PERIOD_MILLIS = 10000
 const val DEFAULT_USE_BATCH_MODE = true
 
-
 data class AssignmentConfiguration(
     val filterCapacity: Int = DEFAULT_FILTER_CAPACITY,
     val eventUploadThreshold: Int = DEFAULT_EVENT_UPLOAD_THRESHOLD,
