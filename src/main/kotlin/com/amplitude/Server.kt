@@ -1,5 +1,8 @@
 package com.amplitude
 
+import com.amplitude.assignment.AmplitudeAssignmentTracker
+import com.amplitude.assignment.Assignment
+import com.amplitude.assignment.AssignmentConfiguration
 import com.amplitude.cohort.CohortApiV3
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.deployment.DeploymentApiV1
@@ -35,6 +38,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import java.util.Base64
@@ -49,7 +53,10 @@ fun main() {
 
     val engine = EvaluationEngineImpl()
 
-    val deploymentConfiguration = DeploymentConfiguration()
+    val assignmentConfiguration = AssignmentConfiguration.fromEnv()
+    val assignmentTracker = AmplitudeAssignmentTracker(apiKey, assignmentConfiguration)
+
+    val deploymentConfiguration = DeploymentConfiguration.fromEnv()
     val deploymentApi = DeploymentApiV1()
     val deploymentStorage = InMemoryDeploymentStorage()
     val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
@@ -181,6 +188,11 @@ fun main() {
 
                 // Evaluate results
                 val result = engine.evaluate(flagConfigs, enrichedUser)
+                if (enrichedUser != null) {
+                    launch {
+                        assignmentTracker.track(Assignment(enrichedUser, result))
+                    }
+                }
                 val response = result.filterDeployedVariants(flagKeys)
                 call.respond(response)
             }
@@ -208,6 +220,11 @@ fun main() {
 
                 // Evaluate results
                 val result = engine.evaluate(flagConfigs, enrichedUser)
+                if (enrichedUser != null) {
+                    launch {
+                        assignmentTracker.track(Assignment(enrichedUser, result))
+                    }
+                }
                 val response = result.filterDeployedVariants(flagKeys)
                 call.respond(response)
             }
@@ -234,6 +251,11 @@ fun main() {
 
                 // Evaluate results
                 val result = engine.evaluate(flagConfigs, enrichedUser)
+                if (enrichedUser != null) {
+                    launch {
+                        assignmentTracker.track(Assignment(enrichedUser, result))
+                    }
+                }
                 val response = result.filterDeployedVariants(flagKeys)
                 call.respond(response)
             }
@@ -260,6 +282,11 @@ fun main() {
 
                 // Evaluate results
                 val result = engine.evaluate(flagConfigs, enrichedUser)
+                if (enrichedUser != null) {
+                    launch {
+                        assignmentTracker.track(Assignment(enrichedUser, result))
+                    }
+                }
                 val response = result.filterDeployedVariants(flagKeys)
                 call.respond(response)
             }

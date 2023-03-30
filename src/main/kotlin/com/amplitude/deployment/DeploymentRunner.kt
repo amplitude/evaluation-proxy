@@ -8,12 +8,6 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-data class DeploymentConfiguration(
-    val flagConfigPollerIntervalMillis: Long = 10 * 1000,
-    val cohortPollerIntervalMillis: Long = 60 * 1000,
-    val maxCohortSize: Int = Int.MAX_VALUE,
-)
-
 class DeploymentRunner(
     @Volatile var configuration: DeploymentConfiguration,
     private val deploymentKey: String,
