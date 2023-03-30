@@ -1,11 +1,13 @@
 plugins {
     application
+    id("io.ktor.plugin") version "2.2.4"
     kotlin("jvm") version "1.8.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
+    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 application {
-    mainClass.set("com.amplitude.ApplicationKt")
+    mainClass.set("com.amplitude.ServerKt")
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }
@@ -24,20 +26,26 @@ val prometheusVersion: String by project
 val serializationVersion: String by project
 val experimentSdkVersion: String by project
 val experimentEvaluationVersion: String by project
-
-
+val amplitudeAnalytics: String by project
+val amplitudeAnalyticsJson: String by project
 dependencies {
-    implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
+    // implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
+    implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
+    implementation("com.amplitude:java-sdk:${amplitudeAnalytics}")
+    implementation("org.json:json:${amplitudeAnalyticsJson}")
 
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
-    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
+
+    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
+
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
