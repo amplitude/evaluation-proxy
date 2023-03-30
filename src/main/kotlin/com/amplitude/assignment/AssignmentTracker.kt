@@ -5,11 +5,11 @@ import com.amplitude.Event
 import com.amplitude.experiment.evaluation.FLAG_TYPE_MUTUAL_EXCLUSION_GROUP
 import org.json.JSONObject
 
-internal interface AssignmentTracker {
+interface AssignmentTracker {
     suspend fun track(assignment: Assignment)
 }
 
-internal class AmplitudeAssignmentTracker(
+class AmplitudeAssignmentTracker(
     private val amplitude: Amplitude,
     private val assignmentFilter: AssignmentFilter,
 ) : AssignmentTracker {

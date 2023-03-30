@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     application
     id("io.ktor.plugin") version "2.2.4"
@@ -18,6 +20,10 @@ repositories {
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
 }
 
+tasks {
+    withType<KotlinCompile> { kotlinOptions { jvmTarget = "17" } }
+}
+
 // Defined in gradle.properties
 val ktorVersion: String by project
 val kotlinVersion: String by project
@@ -28,12 +34,12 @@ val experimentSdkVersion: String by project
 val experimentEvaluationVersion: String by project
 val amplitudeAnalytics: String by project
 val amplitudeAnalyticsJson: String by project
+
 dependencies {
-    // implementation("com.amplitude:experiment-jvm-server:$experimentSdkVersion")
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
-    implementation("com.amplitude:java-sdk:${amplitudeAnalytics}")
-    implementation("org.json:json:${amplitudeAnalyticsJson}")
+    implementation("com.amplitude:java-sdk:$amplitudeAnalytics")
+    implementation("org.json:json:$amplitudeAnalyticsJson")
 
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
