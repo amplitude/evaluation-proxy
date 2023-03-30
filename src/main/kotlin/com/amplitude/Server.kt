@@ -22,6 +22,7 @@ import com.amplitude.util.json
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
@@ -38,6 +39,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
@@ -45,30 +47,30 @@ import java.util.Base64
 
 const val VERSION = "0.1.0"
 
+val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
+val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
+val baseDeploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
+
+val engine = EvaluationEngineImpl()
+
+val assignmentConfiguration = AssignmentConfiguration.fromEnv()
+val assignmentTracker = AmplitudeAssignmentTracker(apiKey, assignmentConfiguration)
+
+val deploymentConfiguration = DeploymentConfiguration.fromEnv()
+val deploymentApi = DeploymentApiV1()
+val deploymentStorage = InMemoryDeploymentStorage()
+val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
+val cohortStorage = InMemoryCohortStorage()
+
+val deploymentManager = DeploymentManager(
+    deploymentConfiguration,
+    deploymentApi,
+    deploymentStorage,
+    cohortApi,
+    cohortStorage
+)
+
 fun main() {
-
-    val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
-    val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
-    val baseDeploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
-
-    val engine = EvaluationEngineImpl()
-
-    val assignmentConfiguration = AssignmentConfiguration.fromEnv()
-    val assignmentTracker = AmplitudeAssignmentTracker(apiKey, assignmentConfiguration)
-
-    val deploymentConfiguration = DeploymentConfiguration.fromEnv()
-    val deploymentApi = DeploymentApiV1()
-    val deploymentStorage = InMemoryDeploymentStorage()
-    val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
-    val cohortStorage = InMemoryCohortStorage()
-
-    val deploymentManager = DeploymentManager(
-        deploymentConfiguration,
-        deploymentApi,
-        deploymentStorage,
-        cohortApi,
-        cohortStorage
-    )
 
     runBlocking {
         if (baseDeploymentKey != null) {
@@ -166,135 +168,56 @@ fun main() {
             }
 
             get("/sdk/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getApiKey()
-                if (deploymentKey == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "Invalid deployment key.")
-                    return@get
-                }
-                // Get flag configs for the deployment from storage.
-                val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
-                if (flagConfigs == null || flagConfigs.isEmpty()) {
-                    call.respond<Map<String, SerialVariant>>(mapOf())
-                    return@get
-                }
-                // Get flag keys and user from request.
-                val flagKeys = call.request.getFlagKeys()
-                val user = call.request.getUserFromHeader()
-                // Enrich user with cohort IDs.
-                val enrichedUser = user.userId?.let { userId ->
-                    user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
-                }
-
-                // Evaluate results
-                val result = engine.evaluate(flagConfigs, enrichedUser)
-                if (enrichedUser != null) {
-                    launch {
-                        assignmentTracker.track(Assignment(enrichedUser, result))
-                    }
-                }
-                val response = result.filterDeployedVariants(flagKeys)
-                call.respond(response)
+                call.evaluate(ApplicationRequest::getUserFromHeader)
             }
-
             post("/sdk/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getApiKey()
-                if (deploymentKey == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "Invalid deployment key.")
-                    return@post
-                }
-                // Get flag configs for the deployment from storage.
-                val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
-                if (flagConfigs == null || flagConfigs.isEmpty()) {
-                    call.respond<Map<String, SerialVariant>>(mapOf())
-                    return@post
-                }
-                // Get flag keys and user from request.
-                val flagKeys = call.request.getFlagKeys()
-                val user = call.request.getUserFromBody()
-                // Enrich user with cohort IDs.
-                val enrichedUser = user.userId?.let { userId ->
-                    user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
-                }
-
-                // Evaluate results
-                val result = engine.evaluate(flagConfigs, enrichedUser)
-                if (enrichedUser != null) {
-                    launch {
-                        assignmentTracker.track(Assignment(enrichedUser, result))
-                    }
-                }
-                val response = result.filterDeployedVariants(flagKeys)
-                call.respond(response)
+                call.evaluate(ApplicationRequest::getUserFromBody)
             }
             get("/v1/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getApiKey()
-                if (deploymentKey == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "Invalid deployment key.")
-                    return@get
-                }
-                // Get flag configs for the deployment from storage.
-                val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
-                if (flagConfigs == null || flagConfigs.isEmpty()) {
-                    call.respond<Map<String, SerialVariant>>(mapOf())
-                    return@get
-                }
-                // Get flag keys and user from request.
-                val flagKeys = call.request.getFlagKeys()
-                val user = call.request.getUserFromQuery()
-                // Enrich user with cohort IDs.
-                val enrichedUser = user.userId?.let { userId ->
-                    user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
-                }
-
-                // Evaluate results
-                val result = engine.evaluate(flagConfigs, enrichedUser)
-                if (enrichedUser != null) {
-                    launch {
-                        assignmentTracker.track(Assignment(enrichedUser, result))
-                    }
-                }
-                val response = result.filterDeployedVariants(flagKeys)
-                call.respond(response)
+                call.evaluate(ApplicationRequest::getUserFromQuery)
             }
             post("/v1/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getApiKey()
-                if (deploymentKey == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "Invalid deployment key.")
-                    return@post
-                }
-                // Get flag configs for the deployment from storage.
-                val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
-                if (flagConfigs == null || flagConfigs.isEmpty()) {
-                    call.respond<Map<String, SerialVariant>>(mapOf())
-                    return@post
-                }
-                // Get flag keys and user from request.
-                val flagKeys = call.request.getFlagKeys()
-                val user = call.request.getUserFromBody()
-                // Enrich user with cohort IDs.
-                val enrichedUser = user.userId?.let { userId ->
-                    user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
-                }
-
-                // Evaluate results
-                val result = engine.evaluate(flagConfigs, enrichedUser)
-                if (enrichedUser != null) {
-                    launch {
-                        assignmentTracker.track(Assignment(enrichedUser, result))
-                    }
-                }
-                val response = result.filterDeployedVariants(flagKeys)
-                call.respond(response)
+                call.evaluate(ApplicationRequest::getUserFromBody)
             }
         }
     }.start(wait = true)
 }
 
-// TODO Refactor to better encapsulate and reuse code
+suspend fun ApplicationCall.evaluate(
+    userProvider: suspend ApplicationRequest.() -> SkylabUser
+) {
+    // Deployment key is included in Authorization header with prefix "Api-Key "
+    val deploymentKey = this.request.getApiKey()
+    if (deploymentKey == null) {
+        this.respond(HttpStatusCode.Unauthorized, "Invalid deployment key.")
+        return
+    }
+    // Get flag configs for the deployment from storage.
+    val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
+    if (flagConfigs == null || flagConfigs.isEmpty()) {
+        this.respond<Map<String, SerialVariant>>(mapOf())
+        return
+    }
+    // Get flag keys and user from request.
+    val flagKeys = this.request.getFlagKeys()
+    val user = this.request.userProvider()
+    // Enrich user with cohort IDs.
+    val enrichedUser = user.userId?.let { userId ->
+        user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
+    }
+
+    // Evaluate results
+    val result = engine.evaluate(flagConfigs, enrichedUser)
+    if (enrichedUser != null) {
+        coroutineScope {
+            launch {
+                assignmentTracker.track(Assignment(enrichedUser, result))
+            }
+        }
+    }
+    val response = result.filterDeployedVariants(flagKeys)
+    this.respond(response)
+}
 
 /**
  * Get the deployment key from the call, included in Authorization header with prefix "Api-Key "
