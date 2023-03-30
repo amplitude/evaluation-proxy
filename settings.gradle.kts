@@ -1,1 +1,1 @@
-rootProject.name = "evaluation-server"
+rootProject.name = "evaluation-proxy"
