@@ -8,7 +8,7 @@ const val DAY_MILLIS: Long = 24 * 60 * 60 * 1000
 data class Assignment(
     val user: SkylabUser,
     val results: Map<String, FlagResult>,
-    val timestamp: Long = System.currentTimeMillis(),
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 fun Assignment.canonicalize(): String {

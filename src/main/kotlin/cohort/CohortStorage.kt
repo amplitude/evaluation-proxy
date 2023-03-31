@@ -13,7 +13,7 @@ class InMemoryCohortStorage : CohortStorage {
 
     private class Cohort(
         val description: CohortDescription,
-        val members: Set<String>,
+        val members: Set<String>
     )
 
     private val lock = Mutex()

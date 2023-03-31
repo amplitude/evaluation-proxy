@@ -14,7 +14,7 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
         var value: V? = null,
         var prev: Node<K, V>? = null,
         var next: Node<K, V>? = null,
-        var ts: Long = System.currentTimeMillis(),
+        var ts: Long = System.currentTimeMillis()
     )
 
     private var count = 0
@@ -22,7 +22,7 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
     private val head: Node<K, V> = Node()
     private val tail: Node<K, V> = Node()
     private val lock = Mutex()
-    private val timeout = ttlMillis > 0;
+    private val timeout = ttlMillis > 0
 
     init {
         head.next = tail
@@ -32,7 +32,7 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
     suspend fun get(key: K): V? = lock.withLock {
         val n = map[key] ?: return null
         if (timeout && n.ts + ttlMillis < System.currentTimeMillis()) {
-            remove(key)
+            removeNodeForKey(key)
             return null
         }
         updateInternal(n)
@@ -54,12 +54,16 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
         if (count > capacity) {
             val del = tail.prev?.key
             if (del != null) {
-                remove(del)
+                removeNodeForKey(del)
             }
         }
     }
 
     suspend fun remove(key: K): Unit = lock.withLock {
+        removeNodeForKey(key)
+    }
+
+    private fun removeNodeForKey(key: K) {
         val n = map[key] ?: return
         removeInternal(n)
         map.remove(n.key)

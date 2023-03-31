@@ -13,7 +13,7 @@ class DeploymentRunner(
     private val deploymentKey: String,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
-    private val cohortLoader: CohortLoader,
+    private val cohortLoader: CohortLoader
 ) {
 
     companion object {

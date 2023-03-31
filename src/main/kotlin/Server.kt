@@ -71,7 +71,6 @@ val deploymentManager = DeploymentManager(
 )
 
 fun main() {
-
     runBlocking {
         if (baseDeploymentKey != null) {
             deploymentStorage.putDeployment(baseDeploymentKey)
@@ -98,7 +97,6 @@ fun main() {
             }
         )
         routing {
-
             get("/api/v1/deployments") {
                 call.respond(deploymentStorage.getDeployments())
             }

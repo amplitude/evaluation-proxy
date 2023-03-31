@@ -11,12 +11,12 @@ interface AssignmentTracker {
 
 class AmplitudeAssignmentTracker(
     private val amplitude: Amplitude,
-    private val assignmentFilter: AssignmentFilter,
+    private val assignmentFilter: AssignmentFilter
 ) : AssignmentTracker {
 
     constructor(
         apiKey: String,
-        config: AssignmentConfiguration,
+        config: AssignmentConfiguration
     ) : this (
         amplitude = Amplitude.getInstance().apply {
             setEventUploadThreshold(config.eventUploadThreshold)

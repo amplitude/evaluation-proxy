@@ -12,7 +12,7 @@ import kotlinx.coroutines.sync.withLock
 class DeploymentLoader(
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
-    private val cohortLoader: CohortLoader,
+    private val cohortLoader: CohortLoader
 ) {
 
     companion object {

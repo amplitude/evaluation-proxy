@@ -21,6 +21,7 @@ fun Application.configureLogging() {
         filter { call -> call.request.path().startsWith("/") }
     }
 }
+
 /**
  * Enable or disable prometheus metrics from the /metrics endpoint.
  *

@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 class CohortLoader(
     @Volatile var maxCohortSize: Int,
     private val cohortApi: CohortApi,
-    private val cohortStorage: CohortStorage,
+    private val cohortStorage: CohortStorage
 ) {
 
     companion object {
@@ -38,7 +38,7 @@ class CohortLoader(
 
         // Download and store each cohort if a download job has not already been started.
         for (cohort in cohorts) {
-            jobsMutex.withLock {
+            val job = jobsMutex.withLock {
                 jobs.getOrPut(cohort.id) {
                     launch {
                         val cohortMembers = cohortApi.getCohortMembers(cohort)
@@ -46,7 +46,8 @@ class CohortLoader(
                         jobsMutex.withLock { jobs.remove(cohort.id) }
                     }
                 }
-            }.join()
+            }
+            job.join()
         }
         log.debug("loadCohorts: end - cohortIds=$cohortIds")
     }

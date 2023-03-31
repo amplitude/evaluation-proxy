@@ -23,18 +23,18 @@ private data class SerialCohortDescription(
     @SerialName("lastMod") val lastMod: Long,
     @SerialName("type") val type: String,
     @SerialName("id") val id: String,
-    @SerialName("size") val size: Int,
+    @SerialName("size") val size: Int
 )
 
 @Serializable
 private data class GetCohortDescriptionsResponse(
-    @SerialName("cohorts") val cohorts: List<SerialCohortDescription>,
+    @SerialName("cohorts") val cohorts: List<SerialCohortDescription>
 )
 
 @Serializable
 private data class GetCohortMembersResponse(
     @SerialName("cohort") val cohort: SerialCohortDescription,
-    @SerialName("user_ids") val userIds: List<String?>,
+    @SerialName("user_ids") val userIds: List<String?>
 )
 
 interface CohortApi {

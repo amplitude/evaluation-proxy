@@ -13,7 +13,7 @@ const val DEFAULT_MAX_COHORT_SIZE = Int.MAX_VALUE
 data class DeploymentConfiguration(
     val flagConfigPollerIntervalMillis: Long = DEFAULT_FLAG_CONFIG_POLLER_INTERVAL_MILLIS,
     val cohortPollerIntervalMillis: Long = DEFAULT_COHORT_POLLER_INTERVAL_MILLIS,
-    val maxCohortSize: Int = DEFAULT_MAX_COHORT_SIZE,
+    val maxCohortSize: Int = DEFAULT_MAX_COHORT_SIZE
 ) {
     companion object {
         fun fromEnv() = DeploymentConfiguration(

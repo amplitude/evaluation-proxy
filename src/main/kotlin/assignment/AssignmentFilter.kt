@@ -15,7 +15,7 @@ class InMemoryAssignmentFilter(size: Int) : AssignmentFilter {
         val canonicalAssignment = assignment.canonicalize()
         val track = cache.get(canonicalAssignment) == null
         if (track) {
-            cache.remove(canonicalAssignment)
+            cache.set(canonicalAssignment, Unit)
         }
         return track
     }

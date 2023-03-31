@@ -5,14 +5,14 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.delay
 
 class HttpErrorResponseException(
-    val statusCode: HttpStatusCode,
+    val statusCode: HttpStatusCode
 ) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}")
 
 data class RetryConfig(
     val times: Int = 8,
     val initialDelayMillis: Long = 100,
     val maxDelay: Long = 10000,
-    val factor: Double = 2.0,
+    val factor: Double = 2.0
 )
 
 suspend fun retry(

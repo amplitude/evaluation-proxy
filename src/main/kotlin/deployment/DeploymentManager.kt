@@ -18,7 +18,7 @@ class DeploymentManager(
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
-    cohortStorage: CohortStorage,
+    cohortStorage: CohortStorage
 ) {
 
     companion object {
@@ -75,7 +75,7 @@ class DeploymentManager(
             deploymentKey,
             deploymentApi,
             deploymentStorage,
-            cohortLoader,
+            cohortLoader
         )
         deploymentRunner.start()
         deploymentRunners[deploymentKey] = deploymentRunner
