@@ -7,7 +7,7 @@ import java.util.HashMap
 /**
  * Least recently used (LRU) cache with TTL for cache entries.
  */
-internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Long = Long.MAX_VALUE) {
+internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Long = 0) {
 
     private class Node<K, V>(
         var key: K? = null,
@@ -22,6 +22,7 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
     private val head: Node<K, V> = Node()
     private val tail: Node<K, V> = Node()
     private val lock = Mutex()
+    private val timeout = ttlMillis > 0;
 
     init {
         head.next = tail
@@ -30,7 +31,7 @@ internal class Cache<K, V>(private val capacity: Int, private val ttlMillis: Lon
 
     suspend fun get(key: K): V? = lock.withLock {
         val n = map[key] ?: return null
-        if (n.ts + ttlMillis < System.currentTimeMillis()) {
+        if (timeout && n.ts + ttlMillis < System.currentTimeMillis()) {
             remove(key)
             return null
         }
