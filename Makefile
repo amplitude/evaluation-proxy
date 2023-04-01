@@ -2,7 +2,7 @@ build:
 	./graldew assemble
 
 run: build
-	./gradlew run
+	./gradlew run --console=plain
 
 docker-build: build
 	docker build -t experiment-local-proxy .

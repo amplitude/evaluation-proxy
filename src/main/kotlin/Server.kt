@@ -19,6 +19,7 @@ import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.HttpErrorResponseException
 import com.amplitude.util.json
+import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -46,6 +47,8 @@ import kotlinx.serialization.decodeFromString
 import java.util.Base64
 
 const val VERSION = "0.1.0"
+
+val log = logger("Server")
 
 val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
 val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
@@ -168,12 +171,15 @@ fun main() {
             get("/sdk/vardata") {
                 call.evaluate(ApplicationRequest::getUserFromHeader)
             }
+
             post("/sdk/vardata") {
                 call.evaluate(ApplicationRequest::getUserFromBody)
             }
+
             get("/v1/vardata") {
                 call.evaluate(ApplicationRequest::getUserFromQuery)
             }
+
             post("/v1/vardata") {
                 call.evaluate(ApplicationRequest::getUserFromBody)
             }
@@ -205,6 +211,7 @@ suspend fun ApplicationCall.evaluate(
     }
 
     // Evaluate results
+    log.debug("evaluate - user=$enrichedUser")
     val result = engine.evaluate(flagConfigs, enrichedUser)
     if (enrichedUser != null) {
         coroutineScope {
