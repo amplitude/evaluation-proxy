@@ -7,9 +7,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import project.ProjectConfiguration
 
 class DeploymentRunner(
-    @Volatile var configuration: DeploymentConfiguration,
+    @Volatile var configuration: ProjectConfiguration,
     private val deploymentKey: String,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
@@ -33,16 +34,6 @@ class DeploymentRunner(
             while (true) {
                 delay(configuration.flagConfigPollerIntervalMillis)
                 deploymentLoader.loadDeployment(deploymentKey)
-            }
-        }
-        // Periodic cohort refresher
-        scope.launch {
-            while (true) {
-                delay(configuration.cohortPollerIntervalMillis)
-                val cohortIds = deploymentStorage.getCohortIds(deploymentKey)
-                if (cohortIds != null) {
-                    cohortLoader.loadCohorts(cohortIds)
-                }
             }
         }
     }

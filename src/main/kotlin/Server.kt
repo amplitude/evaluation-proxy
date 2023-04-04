@@ -5,10 +5,10 @@ import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentConfiguration
 import com.amplitude.cohort.CohortApiV3
 import com.amplitude.cohort.InMemoryCohortStorage
+import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.deployment.DeploymentApiV1
-import com.amplitude.deployment.DeploymentConfiguration
-import com.amplitude.deployment.DeploymentManager
 import com.amplitude.deployment.InMemoryDeploymentStorage
+import com.amplitude.deployment.RedisDeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
 import com.amplitude.experiment.evaluation.FlagResult
 import com.amplitude.experiment.evaluation.SkylabUser
@@ -17,6 +17,7 @@ import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialVariant
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
+import com.amplitude.project.ProjectManager
 import com.amplitude.util.HttpErrorResponseException
 import com.amplitude.util.json
 import com.amplitude.util.logger
@@ -44,29 +45,45 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
+import project.ProjectConfiguration
 import java.util.Base64
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 const val VERSION = "0.1.0"
+const val DEFAULT_REDIS_PREFIX = "amplitude"
 
 val log = logger("Server")
 
 val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
 val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
 val baseDeploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
+val redisPrefix = stringEnv("AMPLITUDE_REDIS_PREFIX", DEFAULT_REDIS_PREFIX)!!
+val redisUrl = stringEnv("AMPLITUDE_REDIS_URL")
 
 val engine = EvaluationEngineImpl()
 
 val assignmentConfiguration = AssignmentConfiguration.fromEnv()
 val assignmentTracker = AmplitudeAssignmentTracker(apiKey, assignmentConfiguration)
-
-val deploymentConfiguration = DeploymentConfiguration.fromEnv()
+val projectConfiguration = ProjectConfiguration.fromEnv()
 val deploymentApi = DeploymentApiV1()
-val deploymentStorage = InMemoryDeploymentStorage()
+val deploymentStorage = if (redisUrl == null) {
+    InMemoryDeploymentStorage()
+} else {
+    RedisDeploymentStorage(redisUrl, redisPrefix)
+}
 val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
-val cohortStorage = InMemoryCohortStorage()
-
-val deploymentManager = DeploymentManager(
-    deploymentConfiguration,
+val cohortStorage = if (redisUrl == null) {
+    InMemoryCohortStorage()
+} else {
+    RedisCohortStorage(
+        redisUrl,
+        redisPrefix,
+        projectConfiguration.flagConfigPollerIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
+    )
+}
+val projectManager = ProjectManager(
+    projectConfiguration,
     deploymentApi,
     deploymentStorage,
     cohortApi,
@@ -78,7 +95,7 @@ fun main() {
         if (baseDeploymentKey != null) {
             deploymentStorage.putDeployment(baseDeploymentKey)
         }
-        deploymentManager.start()
+        projectManager.start()
     }
 
     embeddedServer(Netty, port = 3546, host = "0.0.0.0") {
@@ -93,7 +110,7 @@ fun main() {
                 val plugin = ShutDownUrl("/shutdown") { 0 }
                 onCall { call ->
                     if (call.request.uri == plugin.url) {
-                        deploymentManager.stop()
+                        projectManager.stop()
                         plugin.doShutdown(call)
                     }
                 }

@@ -6,5 +6,5 @@ import org.slf4j.LoggerFactory
 fun logger(name: String): Logger = LoggerFactory.getLogger(name)
 
 fun <R : Any> R.logger(): Lazy<Logger> {
-    return lazy { LoggerFactory.getLogger(this::class.java.name.substringBefore("\$Companion")) }
+    return lazy { logger(this::class.java.name.substringBefore("\$Companion")) }
 }

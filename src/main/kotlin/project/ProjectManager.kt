@@ -1,8 +1,11 @@
-package com.amplitude.deployment
+package com.amplitude.project
 
 import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage
+import com.amplitude.deployment.DeploymentApi
+import com.amplitude.deployment.DeploymentRunner
+import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
@@ -15,10 +18,10 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import project.ProjectConfiguration
 
-// TODO: really this is a project manager. It manages all deployments and targeted cohorts within a project
-class DeploymentManager(
-    @Volatile var configuration: DeploymentConfiguration,
+class ProjectManager(
+    @Volatile var configuration: ProjectConfiguration,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
@@ -111,11 +114,12 @@ class DeploymentManager(
             allFlagConfigs += deploymentStorage.getFlagConfigs(deploymentKey) ?: continue
         }
         val allTargetedCohortIds = allFlagConfigs.getCohortIds()
-        val allStoredCohortIds = cohortStorage.getCohortDescriptions()?.map { it.id }?.toSet() ?: emptySet()
-        val unusedCohortIds = allStoredCohortIds - allTargetedCohortIds
-        for (cohortId in unusedCohortIds) {
-            log.info("Removing unused cohort: $cohortId")
-            cohortStorage.removeCohort(cohortId)
+        val allStoredCohortDescriptions = cohortStorage.getCohortDescriptions().values
+        for (cohortDescription in allStoredCohortDescriptions) {
+            if (!allTargetedCohortIds.contains(cohortDescription.id)) {
+                log.info("Removing unused cohort: $cohortDescription")
+                cohortStorage.removeCohort(cohortDescription)
+            }
         }
     }
 }
