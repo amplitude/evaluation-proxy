@@ -2,7 +2,6 @@ package com.amplitude.deployment
 
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
-import com.amplitude.log
 import com.amplitude.util.Redis
 import com.amplitude.util.RedisKey
 import com.amplitude.util.getCohortIds

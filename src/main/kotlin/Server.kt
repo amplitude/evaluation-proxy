@@ -10,7 +10,6 @@ import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.deployment.RedisDeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
-import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.FlagResult
 import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.serialization.SerialExperimentUser

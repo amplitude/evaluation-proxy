@@ -1,6 +1,9 @@
 build:
 	./graldew assemble
 
+lint:
+	./gradlew ktlintFormat
+
 run: build
 	./gradlew run --console=plain
 
