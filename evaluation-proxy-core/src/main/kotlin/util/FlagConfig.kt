@@ -3,9 +3,9 @@ package com.amplitude.util
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.UserPropertyFilter
 
-internal const val COHORT_PROP_KEY = "userdata_cohort"
+const val COHORT_PROP_KEY = "userdata_cohort"
 
-internal fun Collection<FlagConfig>.getCohortIds(): Set<String> {
+fun Collection<FlagConfig>.getCohortIds(): Set<String> {
     val cohortIds = mutableSetOf<String>()
     for (flag in this) {
         cohortIds += flag.getCohortIds()
@@ -13,7 +13,7 @@ internal fun Collection<FlagConfig>.getCohortIds(): Set<String> {
     return cohortIds
 }
 
-internal fun FlagConfig.getCohortIds(): Set<String> {
+fun FlagConfig.getCohortIds(): Set<String> {
     val cohortIds = mutableSetOf<String>()
     for (filter in this.allUsersTargetingConfig.conditions) {
         if (filter.isCohortFilter()) {

@@ -1,67 +1,24 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-    application
-    id("io.ktor.plugin") version "2.2.4"
-    kotlin("jvm") version "1.8.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
     id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
 }
 
-application {
-    mainClass.set("com.amplitude.ServerKt")
-    val isDevelopment: Boolean = project.ext.has("development")
-    applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
+allprojects {
+    group = "com.amplitude"
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
+    }
 }
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
-}
-
-group = "com.amplitude"
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-tasks {
-    withType<KotlinCompile> { kotlinOptions { jvmTarget = "17" } }
-}
-
-// Defined in gradle.properties
-val ktorVersion: String by project
-val kotlinVersion: String by project
-val logbackVersion: String by project
-val prometheusVersion: String by project
-val serializationVersion: String by project
-val experimentSdkVersion: String by project
-val experimentEvaluationVersion: String by project
-val amplitudeAnalytics: String by project
-val amplitudeAnalyticsJson: String by project
-val lettuce: String by project
-
-dependencies {
-    implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
-    implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
-    implementation("com.amplitude:java-sdk:$amplitudeAnalytics")
-    implementation("org.json:json:$amplitudeAnalyticsJson")
-
-    implementation("io.lettuce:lettuce-core:$lettuce")
-
-    implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
-
-    implementation("io.micrometer:micrometer-registry-prometheus:$prometheusVersion")
-    implementation("ch.qos.logback:logback-classic:$logbackVersion")
-
-    testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
+nexusPublishing {
+    repositories {
+        sonatype {
+            stagingProfileId.set(System.getenv("SONATYPE_STAGING_PROFILE_ID"))
+            username.set(System.getenv("SONATYPE_USERNAME"))
+            password.set(System.getenv("SONATYPE_PASSWORD"))
+        }
+    }
 }
