@@ -41,12 +41,15 @@ val experimentSdkVersion: String by project
 val experimentEvaluationVersion: String by project
 val amplitudeAnalytics: String by project
 val amplitudeAnalyticsJson: String by project
+val lettuce: String by project
 
 dependencies {
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
     implementation("com.amplitude:java-sdk:$amplitudeAnalytics")
     implementation("org.json:json:$amplitudeAnalyticsJson")
+
+    implementation("io.lettuce:lettuce-core:$lettuce")
 
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")

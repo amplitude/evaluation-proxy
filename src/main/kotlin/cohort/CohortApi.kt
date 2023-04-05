@@ -6,6 +6,7 @@ import com.amplitude.util.retry
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
@@ -49,7 +50,11 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
     }
 
     private val basicAuth = Base64.getEncoder().encodeToString("$apiKey:$secretKey".toByteArray(Charsets.UTF_8))
-    private val client = HttpClient(OkHttp)
+    private val client = HttpClient(OkHttp) {
+        install(HttpTimeout) {
+            socketTimeoutMillis = 360000
+        }
+    }
 
     override suspend fun getCohortDescriptions(): List<CohortDescription> {
         log.debug("getCohortDescriptions: start")
@@ -63,7 +68,6 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
             .also { log.debug("getCohortDescriptions: end - result=$it") }
     }
 
-    // TODO configure the timeout for long running requests
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
         val response = retry(onFailure = { e -> log.info("Get cohort members failed: $e") }) {

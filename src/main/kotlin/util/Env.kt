@@ -1,7 +1,7 @@
 package com.amplitude.util
 
-internal fun stringEnv(variable: String): String? {
-    return System.getenv(variable)
+internal fun stringEnv(variable: String, default: String? = null): String? {
+    return System.getenv(variable) ?: default
 }
 
 internal fun booleanEnv(variable: String, default: Boolean = false): Boolean {
