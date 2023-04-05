@@ -27,16 +27,10 @@ class DeploymentLoader(
         jobsMutex.withLock {
             jobs.getOrPut(deploymentKey) {
                 launch {
-                    val storageFlagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
                     val networkFlagConfigs = deploymentApi.getFlagConfigs(deploymentKey)
-                    val storageCohortIds = storageFlagConfigs?.getCohortIds() ?: setOf()
                     val networkCohortIds = networkFlagConfigs.getCohortIds()
-                    // Load cohorts if
-                    log.info("loadDeployment: flag configs contain new cohort targets - deploymentKey=$deploymentKey, cohortIds=$networkCohortIds")
                     cohortLoader.loadCohorts(networkCohortIds)
                     deploymentStorage.putFlagConfigs(deploymentKey, networkFlagConfigs)
-
-                    // Clear up the job.
                     jobs.remove(deploymentKey)
                 }
             }

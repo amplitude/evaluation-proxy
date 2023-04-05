@@ -1,6 +1,8 @@
 package com.amplitude.deployment
 
 import com.amplitude.experiment.evaluation.FlagConfig
+import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
+import com.amplitude.log
 import com.amplitude.util.Redis
 import com.amplitude.util.RedisKey
 import com.amplitude.util.getCohortIds
@@ -92,6 +94,9 @@ class RedisDeploymentStorage(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
+    private val mutex = Mutex()
+    private var flagConfigCache: List<FlagConfig>? = null
+
     override suspend fun getDeployments(): Set<String> {
         return redis.smembers(RedisKey.Deployments) ?: emptySet()
     }
@@ -108,12 +113,23 @@ class RedisDeploymentStorage(
 
     override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>? {
         val jsonEncodedFlags = redis.get(RedisKey.FlagConfigs(deploymentKey)) ?: return null
-        return json.decodeFromString(jsonEncodedFlags)
+        return json.decodeFromString<List<SerialFlagConfig>>(jsonEncodedFlags).map { it.convert() }
     }
 
     override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>) {
-        val jsonEncodedFlags = json.encodeToString(flagConfigs)
-        redis.set(RedisKey.FlagConfigs(deploymentKey), jsonEncodedFlags)
+        // Optimization so repeat puts don't update the data to the same value in redis.
+        val changed = mutex.withLock {
+            if (flagConfigs != flagConfigCache) {
+                flagConfigCache = flagConfigs
+                true
+            } else {
+                false
+            }
+        }
+        if (changed) {
+            val jsonEncodedFlags = json.encodeToString(flagConfigs.map { SerialFlagConfig(it) })
+            redis.set(RedisKey.FlagConfigs(deploymentKey), jsonEncodedFlags)
+        }
     }
 
     override suspend fun removeFlagConfigs(deploymentKey: String) {

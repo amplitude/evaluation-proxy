@@ -32,7 +32,7 @@ class DeploymentRunner(
         // Periodic flag config and cohort refresher
         scope.launch {
             while (true) {
-                delay(configuration.flagConfigPollerIntervalMillis)
+                delay(configuration.syncIntervalMillis)
                 deploymentLoader.loadDeployment(deploymentKey)
             }
         }

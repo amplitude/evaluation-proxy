@@ -10,6 +10,7 @@ import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.deployment.RedisDeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
+import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.FlagResult
 import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.serialization.SerialExperimentUser
@@ -57,7 +58,7 @@ val log = logger("Server")
 
 val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
 val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
-val baseDeploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
+val deploymentKey = stringEnv("AMPLITUDE_DEPLOYMENT_KEY")
 val redisPrefix = stringEnv("AMPLITUDE_REDIS_PREFIX", DEFAULT_REDIS_PREFIX)!!
 val redisUrl = stringEnv("AMPLITUDE_REDIS_URL")
 
@@ -79,7 +80,7 @@ val cohortStorage = if (redisUrl == null) {
     RedisCohortStorage(
         redisUrl,
         redisPrefix,
-        projectConfiguration.flagConfigPollerIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
+        projectConfiguration.syncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
     )
 }
 val projectManager = ProjectManager(
@@ -92,10 +93,12 @@ val projectManager = ProjectManager(
 
 fun main() {
     runBlocking {
-        if (baseDeploymentKey != null) {
-            deploymentStorage.putDeployment(baseDeploymentKey)
-        }
         projectManager.start()
+        launch {
+            if (deploymentKey != null) {
+                deploymentStorage.putDeployment(deploymentKey)
+            }
+        }
     }
 
     embeddedServer(Netty, port = 3546, host = "0.0.0.0") {
@@ -228,7 +231,7 @@ suspend fun ApplicationCall.evaluate(
     }
 
     // Evaluate results
-    log.debug("evaluate - user=$enrichedUser")
+    log.info("evaluate - user=$enrichedUser")
     val result = engine.evaluate(flagConfigs, enrichedUser)
     if (enrichedUser != null) {
         coroutineScope {

@@ -51,7 +51,7 @@ class ProjectManager(
         // Periodic deployment refresher
         scope.launch {
             while (true) {
-                delay(configuration.flagConfigPollerIntervalMillis)
+                delay(configuration.syncIntervalMillis)
                 val deployments = deploymentStorage.getDeployments()
                 refresh(deployments)
             }
