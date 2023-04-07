@@ -3,6 +3,7 @@ package com.amplitude.deployment
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.util.Redis
+import com.amplitude.util.RedisConfiguration
 import com.amplitude.util.RedisKey
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.json
@@ -81,11 +82,10 @@ class InMemoryDeploymentStorage : DeploymentStorage {
 }
 
 class RedisDeploymentStorage(
-    redisUrl: String,
-    prefix: String
+    redisConfiguration: RedisConfiguration
 ) : DeploymentStorage {
 
-    private val redis = Redis(redisUrl, prefix)
+    private val redis = Redis(redisConfiguration)
 
     // TODO Could be optimized w/ pub sub
     override val deployments = MutableSharedFlow<Set<String>>(
