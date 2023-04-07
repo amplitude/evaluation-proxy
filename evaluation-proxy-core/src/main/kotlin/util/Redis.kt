@@ -11,9 +11,30 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.future.asDeferred
 import kotlin.time.Duration
 
-const val STORAGE_PROTOCOL_VERSION = "v1"
+private const val STORAGE_PROTOCOL_VERSION = "v1"
 
-sealed class RedisKey(val value: String) {
+const val ENV_KEY_REDIS_URL = "AMPLITUDE_CONFIG_REDIS_URL"
+const val ENV_KEY_REDIS_PREFIX = "AMPLITUDE_CONFIG_REDIS_PREFIX"
+
+const val DEFAULT_REDIS_PREFIX = "amplitude"
+
+data class RedisConfiguration(
+    val redisUrl: String,
+    val redisPrefix: String,
+) {
+    companion object {
+        fun fromEnv(): RedisConfiguration? {
+            val redisUrl = stringEnv(ENV_KEY_REDIS_URL)
+            val redisPrefix = stringEnv(ENV_KEY_REDIS_PREFIX, DEFAULT_REDIS_PREFIX)!!
+            if (redisUrl != null) {
+                return RedisConfiguration(redisUrl = redisUrl, redisPrefix = redisPrefix)
+            }
+            return null
+        }
+    }
+}
+
+internal sealed class RedisKey(val value: String) {
 
     object Deployments : RedisKey("$STORAGE_PROTOCOL_VERSION:deployments")
 
@@ -28,28 +49,13 @@ sealed class RedisKey(val value: String) {
     ) : RedisKey("$STORAGE_PROTOCOL_VERSION:cohorts:${cohortDescription.id}:users:${cohortDescription.lastComputed}")
 }
 
-// interface Redis {
-//     suspend fun get(key: RedisKey): String?
-//     suspend fun set(key: RedisKey, value: String)
-//     suspend fun del(key: RedisKey)
-//     suspend fun sadd(key: RedisKey, value: String)
-//     suspend fun sadd(key: RedisKey, values: Set<String>)
-//     suspend fun srem(key: RedisKey, value: String)
-//     suspend fun smembers(key: RedisKey): Set<String>?
-//     suspend fun sismember(key: RedisKey, value: String): Boolean
-//     suspend fun hget(key: RedisKey, field: String): String?
-//     suspend fun hvals(key: RedisKey): List<String>?
-//     suspend fun hset(key: RedisKey, values: Map<String, String>)
-//     suspend fun multi(action: Redis.() -> Unit)
-// }
-
-class Redis(redisUrl: String, private val prefix: String) {
+internal class Redis(private val redisConfiguration: RedisConfiguration) {
 
     private val connection: Deferred<StatefulRedisConnection<String, String>>
-    private val client: RedisClient = RedisClient.create(redisUrl)
+    private val client: RedisClient = RedisClient.create(redisConfiguration.redisUrl)
 
     init {
-        connection = client.connectAsync(StringCodec.UTF8, RedisURI.create(redisUrl)).asDeferred()
+        connection = client.connectAsync(StringCodec.UTF8, RedisURI.create(redisConfiguration.redisUrl)).asDeferred()
     }
 
     suspend fun get(key: RedisKey): String? {
@@ -137,6 +143,21 @@ class Redis(redisUrl: String, private val prefix: String) {
     }
 
     private fun RedisKey.getPrefixedKey(): String {
-        return "$prefix:${this.value}"
+        return "${redisConfiguration.redisPrefix}:${this.value}"
     }
 }
+
+// interface Redis {
+//     suspend fun get(key: RedisKey): String?
+//     suspend fun set(key: RedisKey, value: String)
+//     suspend fun del(key: RedisKey)
+//     suspend fun sadd(key: RedisKey, value: String)
+//     suspend fun sadd(key: RedisKey, values: Set<String>)
+//     suspend fun srem(key: RedisKey, value: String)
+//     suspend fun smembers(key: RedisKey): Set<String>?
+//     suspend fun sismember(key: RedisKey, value: String): Boolean
+//     suspend fun hget(key: RedisKey, field: String): String?
+//     suspend fun hvals(key: RedisKey): List<String>?
+//     suspend fun hset(key: RedisKey, values: Map<String, String>)
+//     suspend fun multi(action: Redis.() -> Unit)
+// }
