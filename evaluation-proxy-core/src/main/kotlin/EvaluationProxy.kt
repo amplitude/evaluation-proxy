@@ -4,6 +4,7 @@ import com.amplitude.assignment.AmplitudeAssignmentTracker
 import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentConfiguration
 import com.amplitude.cohort.CohortApiV3
+import com.amplitude.cohort.CohortApiV5
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.deployment.DeploymentApiV1
@@ -58,7 +59,7 @@ class EvaluationProxy(
     } else {
         RedisDeploymentStorage(redisConfiguration)
     }
-    private val cohortApi = CohortApiV3(apiKey = apiKey, secretKey = secretKey)
+    private val cohortApi = CohortApiV5(apiKey = apiKey, secretKey = secretKey)
     private val cohortStorage = if (redisConfiguration == null) {
         InMemoryCohortStorage()
     } else {

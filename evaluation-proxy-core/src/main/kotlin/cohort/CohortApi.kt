@@ -1,5 +1,6 @@
 package com.amplitude.cohort
 
+import com.amplitude.util.HttpErrorResponseException
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.retry
@@ -10,9 +11,15 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.HttpStatusCode
+import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import org.apache.commons.csv.CSVFormat
+import org.apache.commons.csv.CSVParser
 import java.util.Base64
 
 @Serializable
@@ -80,6 +87,70 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
         }
         val body = json.decodeFromString<GetCohortMembersResponse>(response.body())
         return body.userIds.filterNotNull().toSet()
+            .also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
+    }
+}
+
+@Serializable
+data class GetCohortAsyncResponse(
+    @SerialName("cohort_id")
+    val cohortId: String,
+    @SerialName("request_id")
+    val requestId: String,
+)
+
+class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
+
+    companion object {
+        val log by logger()
+    }
+    private val csvFormat = CSVFormat.RFC4180.builder().setHeader().build()
+    private val basicAuth = Base64.getEncoder().encodeToString("$apiKey:$secretKey".toByteArray(Charsets.UTF_8))
+    private val client = HttpClient(OkHttp) {
+        install(HttpTimeout) {
+            socketTimeoutMillis = 360000
+        }
+    }
+
+    override suspend fun getCohortDescriptions(): List<CohortDescription> {
+        log.debug("getCohortDescriptions: start")
+        val response = retry(onFailure = { e -> log.info("Get cohort descriptions failed: $e") }) {
+            client.get("https://cohort.lab.amplitude.com/api/3/cohorts") {
+                headers { set("Authorization", "Basic $basicAuth") }
+            }
+        }
+        val body = json.decodeFromString<GetCohortDescriptionsResponse>(response.body())
+        return body.cohorts.map { CohortDescription(id = it.id, lastComputed = it.lastComputed, size = it.size) }
+            .also { log.debug("getCohortDescriptions: end - result=$it") }
+    }
+
+    override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
+        log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
+        // Initiate async cohort download
+        val initialResponse = client.get("https://cohort.lab.amplitude.com/api/5/cohorts/request/${cohortDescription.id}") {
+            headers { set("Authorization", "Basic $basicAuth") }
+        }
+        val getCohortResponse = json.decodeFromString<GetCohortAsyncResponse>(initialResponse.body())
+        // Poll until the cohort is ready for download
+        while (true) {
+            delay(1000)
+            val statusResponse =
+                client.get("https://amplitude.com/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
+                    headers { set("Authorization", "Basic $basicAuth") }
+                }
+            if (statusResponse.status == HttpStatusCode.OK) {
+                break
+            } else if (statusResponse.status != HttpStatusCode.Accepted) {
+                throw HttpErrorResponseException(statusResponse.status)
+            }
+        }
+        // Download the cohort
+        val downloadResponse =
+            client.get("https://amplitude.com/api/5/cohorts/request/${getCohortResponse.requestId}/file") {
+                headers { set("Authorization", "Basic $basicAuth") }
+            }
+        val csv = CSVParser.parse(downloadResponse.bodyAsChannel().toInputStream(), Charsets.UTF_8, csvFormat)
+        return csv.mapNotNull { it.get("user_id") }.toSet()
             .also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
     }
 }
