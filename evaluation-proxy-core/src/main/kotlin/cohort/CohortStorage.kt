@@ -1,6 +1,7 @@
 package com.amplitude.cohort
 
 import com.amplitude.util.Redis
+import com.amplitude.util.RedisConfiguration
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
@@ -56,12 +57,11 @@ class InMemoryCohortStorage : CohortStorage {
 }
 
 class RedisCohortStorage(
-    redisUrl: String,
-    prefix: String,
+    redisConfiguration: RedisConfiguration,
     private val ttl: Duration
 ) : CohortStorage {
 
-    private val redis = Redis(redisUrl, prefix)
+    private val redis = Redis(redisConfiguration)
 
     override suspend fun getCohortDescription(cohortId: String): CohortDescription? {
         val jsonEncodedDescription = redis.hget(RedisKey.CohortDescriptions, cohortId) ?: return null
