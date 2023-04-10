@@ -2,7 +2,9 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.8.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
+    kotlin("plugin.serialization") version "1.8.0"
+    `maven-publish`
+    signing
 }
 
 repositories {
@@ -39,3 +41,59 @@ dependencies {
     implementation("org.apache.commons:commons-csv:$apacheCommons")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
+
+// Publishing
+
+val javadocJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("javadoc")
+}
+
+publishing {
+    @Suppress("LocalVariableName")
+    publications.withType<MavenPublication> {
+        groupId = "com.amplitude"
+        artifactId = "evaluation-proxy-core"
+        version = "0.1.0"
+        artifact(javadocJar)
+        pom {
+            name.set("Amplitude Evaluation Proxy")
+            description.set("Core package for Amplitude's evaluation proxy.")
+            url.set("https://github.com/amplitude/evaluation-proxy")
+            licenses {
+                license {
+                    name.set("MIT")
+                    url.set("https://opensource.org/licenses/MIT")
+                    distribution.set("repo")
+                }
+            }
+            developers {
+                developer {
+                    id.set("amplitude")
+                    name.set("Amplitude")
+                    email.set("dev@amplitude.com")
+                }
+            }
+            scm {
+                url.set("https://github.com/amplitude/evaluation-proxy")
+                connection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
+                developerConnection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
+            }
+        }
+    }
+}
+
+signing {
+    val publishing = extensions.findByType<PublishingExtension>()
+    val signingKeyId = System.getenv("SIGNING_KEY_ID")
+    val signingKey = System.getenv("SIGNING_KEY")
+    val signingPassword = System.getenv("SIGNING_PASSWORD")
+    useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+    sign(publishing?.publications)
+}
+
+tasks.withType<Sign>().configureEach {
+    onlyIf { isReleaseBuild }
+}
+
+val isReleaseBuild: Boolean
+    get() = System.getenv("SIGNING_KEY") != null
