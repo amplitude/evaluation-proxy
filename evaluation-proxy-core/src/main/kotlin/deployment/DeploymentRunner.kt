@@ -1,6 +1,7 @@
 package com.amplitude.deployment
 
 import com.amplitude.cohort.CohortLoader
+import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -29,11 +30,21 @@ class DeploymentRunner(
         log.debug("start: - deploymentKey=$deploymentKey")
         deploymentLoader.loadDeployment(deploymentKey)
         log.debug("start: loaded deployment - deploymentKey=$deploymentKey")
-        // Periodic flag config and cohort refresher
+        // Periodic flag config loader
         scope.launch {
             while (true) {
-                delay(configuration.syncIntervalMillis)
+                delay(configuration.flagSyncIntervalMillis)
                 deploymentLoader.loadDeployment(deploymentKey)
+            }
+        }
+        // Periodic cohort refresher
+        scope.launch {
+            while (true) {
+                delay(configuration.cohortSyncIntervalMillis)
+                val cohortIds = deploymentStorage.getFlagConfigs(deploymentKey)?.getCohortIds()
+                if (!cohortIds.isNullOrEmpty()) {
+                    cohortLoader.loadCohorts(cohortIds)
+                }
             }
         }
     }

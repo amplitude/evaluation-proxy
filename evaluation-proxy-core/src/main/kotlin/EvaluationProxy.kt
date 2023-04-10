@@ -3,7 +3,6 @@ package com.amplitude
 import com.amplitude.assignment.AmplitudeAssignmentTracker
 import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentConfiguration
-import com.amplitude.cohort.CohortApiV3
 import com.amplitude.cohort.CohortApiV5
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
@@ -17,9 +16,10 @@ import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.Variant
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialVariant
-import com.amplitude.project.ProjectManager
+import com.amplitude.project.ProjectRunner
 import com.amplitude.util.HttpErrorResponseException
 import com.amplitude.util.RedisConfiguration
+import com.amplitude.util.getCohortIds
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import kotlinx.coroutines.coroutineScope
@@ -65,10 +65,10 @@ class EvaluationProxy(
     } else {
         RedisCohortStorage(
             redisConfiguration,
-            projectConfiguration.syncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
+            projectConfiguration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
         )
     }
-    private val projectManager = ProjectManager(
+    private val projectRunner = ProjectRunner(
         projectConfiguration,
         deploymentApi,
         deploymentStorage,
@@ -80,11 +80,11 @@ class EvaluationProxy(
         for (deploymentKey in deploymentKeys) {
             deploymentStorage.putDeployment(deploymentKey)
         }
-        projectManager.start()
+        projectRunner.start()
     }
 
     suspend fun shutdown() {
-        projectManager.stop()
+        projectRunner.stop()
     }
 
     suspend fun getDeployments(): Set<String> {
@@ -129,7 +129,7 @@ class EvaluationProxy(
         if (userId.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 400, message = "Invalid user ID.")
         }
-        val cohortIds = deploymentStorage.getCohortIds(deploymentKey)
+        val cohortIds = deploymentStorage.getFlagConfigs(deploymentKey)?.getCohortIds()
             ?: throw HttpErrorResponseException(status = 404, message = "Unknown deployment.")
         return cohortStorage.getCohortMembershipsForUser(userId, cohortIds)
     }

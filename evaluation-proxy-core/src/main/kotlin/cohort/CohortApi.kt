@@ -111,8 +111,10 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
         // Initiate async cohort download
         val initialResponse = client.get("https://cohort.lab.amplitude.com/api/5/cohorts/request/${cohortDescription.id}") {
             headers { set("Authorization", "Basic $basicAuth") }
+            parameter("lastComputed", cohortDescription.lastComputed)
         }
         val getCohortResponse = json.decodeFromString<GetCohortAsyncResponse>(initialResponse.body())
+        log.debug("getCohortMembers: requestId=${getCohortResponse.requestId}")
         // Poll until the cohort is ready for download
         while (true) {
             delay(1000)
@@ -120,6 +122,7 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
                 client.get("https://amplitude.com/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
                 }
+            log.debug("getCohortMembers: status=${statusResponse.status}")
             if (statusResponse.status == HttpStatusCode.OK) {
                 break
             } else if (statusResponse.status != HttpStatusCode.Accepted) {
@@ -132,7 +135,7 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
                 headers { set("Authorization", "Basic $basicAuth") }
             }
         val csv = CSVParser.parse(downloadResponse.bodyAsChannel().toInputStream(), Charsets.UTF_8, csvFormat)
-        return csv.mapNotNull { it.get("user_id") }.toSet()
+        return csv.map { it.get("user_id") }.filterNot { it.isNullOrEmpty() }.toSet()
             .also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
     }
 }

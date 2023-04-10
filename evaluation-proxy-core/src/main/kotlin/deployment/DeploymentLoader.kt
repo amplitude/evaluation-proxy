@@ -28,8 +28,11 @@ class DeploymentLoader(
             jobs.getOrPut(deploymentKey) {
                 launch {
                     val networkFlagConfigs = deploymentApi.getFlagConfigs(deploymentKey)
+                    val storageFlagConfigs = deploymentStorage.getFlagConfigs(deploymentKey) ?: listOf()
                     val networkCohortIds = networkFlagConfigs.getCohortIds()
-                    cohortLoader.loadCohorts(networkCohortIds)
+                    val storageCohortIds = storageFlagConfigs.getCohortIds()
+                    val addedCohortIds = networkCohortIds - storageCohortIds
+                    cohortLoader.loadCohorts(addedCohortIds)
                     deploymentStorage.putFlagConfigs(deploymentKey, networkFlagConfigs)
                     jobs.remove(deploymentKey)
                 }

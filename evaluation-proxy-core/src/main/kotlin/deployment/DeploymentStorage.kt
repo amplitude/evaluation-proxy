@@ -23,7 +23,6 @@ interface DeploymentStorage {
     suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>?
     suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>)
     suspend fun removeFlagConfigs(deploymentKey: String)
-    suspend fun getCohortIds(deploymentKey: String): Set<String>?
 }
 
 class InMemoryDeploymentStorage : DeploymentStorage {
@@ -71,12 +70,6 @@ class InMemoryDeploymentStorage : DeploymentStorage {
     override suspend fun removeFlagConfigs(deploymentKey: String) {
         lock.withLock {
             deploymentStorage.remove(deploymentKey)
-        }
-    }
-
-    override suspend fun getCohortIds(deploymentKey: String): Set<String>? {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.getCohortIds()
         }
     }
 }
@@ -133,9 +126,5 @@ class RedisDeploymentStorage(
 
     override suspend fun removeFlagConfigs(deploymentKey: String) {
         redis.del(RedisKey.FlagConfigs(deploymentKey))
-    }
-
-    override suspend fun getCohortIds(deploymentKey: String): Set<String>? {
-        return getFlagConfigs(deploymentKey)?.getCohortIds()
     }
 }

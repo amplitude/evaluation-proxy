@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import project.ProjectConfiguration
 
-class ProjectManager(
+class ProjectRunner(
     @Volatile var configuration: ProjectConfiguration,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
@@ -51,7 +51,7 @@ class ProjectManager(
         // Periodic deployment refresher
         scope.launch {
             while (true) {
-                delay(configuration.syncIntervalMillis)
+                delay(configuration.flagSyncIntervalMillis)
                 val deployments = deploymentStorage.getDeployments()
                 refresh(deployments)
             }
