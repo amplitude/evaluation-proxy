@@ -1,6 +1,7 @@
 package com.amplitude.assignment
 
 import com.amplitude.Amplitude
+import com.amplitude.AssignmentConfiguration
 import com.amplitude.Event
 import com.amplitude.experiment.evaluation.FLAG_TYPE_MUTUAL_EXCLUSION_GROUP
 import org.json.JSONObject

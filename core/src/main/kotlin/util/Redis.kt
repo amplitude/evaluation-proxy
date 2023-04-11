@@ -1,5 +1,6 @@
 package com.amplitude.util
 
+import com.amplitude.RedisConfiguration
 import com.amplitude.cohort.CohortDescription
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisFuture
@@ -13,26 +14,6 @@ import kotlin.time.Duration
 
 private const val STORAGE_PROTOCOL_VERSION = "v1"
 
-const val ENV_KEY_REDIS_URL = "AMPLITUDE_CONFIG_REDIS_URL"
-const val ENV_KEY_REDIS_PREFIX = "AMPLITUDE_CONFIG_REDIS_PREFIX"
-
-const val DEFAULT_REDIS_PREFIX = "amplitude"
-
-data class RedisConfiguration(
-    val redisUrl: String,
-    val redisPrefix: String,
-) {
-    companion object {
-        fun fromEnv(): RedisConfiguration? {
-            val redisUrl = stringEnv(ENV_KEY_REDIS_URL)
-            val redisPrefix = stringEnv(ENV_KEY_REDIS_PREFIX, DEFAULT_REDIS_PREFIX)!!
-            if (redisUrl != null) {
-                return RedisConfiguration(redisUrl = redisUrl, redisPrefix = redisPrefix)
-            }
-            return null
-        }
-    }
-}
 
 internal sealed class RedisKey(val value: String) {
 

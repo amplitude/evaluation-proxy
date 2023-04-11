@@ -1,5 +1,6 @@
 package com.amplitude.deployment
 
+import com.amplitude.Configuration
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
@@ -8,10 +9,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import project.ProjectConfiguration
 
 class DeploymentRunner(
-    @Volatile var configuration: ProjectConfiguration,
+    @Volatile var configuration: Configuration,
     private val deploymentKey: String,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,

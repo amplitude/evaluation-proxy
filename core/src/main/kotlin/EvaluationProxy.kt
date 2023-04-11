@@ -2,7 +2,6 @@ package com.amplitude
 
 import com.amplitude.assignment.AmplitudeAssignmentTracker
 import com.amplitude.assignment.Assignment
-import com.amplitude.assignment.AssignmentConfiguration
 import com.amplitude.cohort.CohortApiV5
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
@@ -18,14 +17,12 @@ import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialVariant
 import com.amplitude.project.ProjectRunner
 import com.amplitude.util.HttpErrorResponseException
-import com.amplitude.util.RedisConfiguration
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
-import project.ProjectConfiguration
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -41,9 +38,7 @@ class EvaluationProxy(
     apiKey: String,
     secretKey: String,
     private val deploymentKeys: Set<String>,
-    projectConfiguration: ProjectConfiguration,
-    assignmentConfiguration: AssignmentConfiguration,
-    redisConfiguration: RedisConfiguration? = null,
+    configuration: Configuration = Configuration(),
 ) {
 
     companion object {
@@ -52,24 +47,24 @@ class EvaluationProxy(
 
     private val engine = EvaluationEngineImpl()
 
-    private val assignmentTracker = AmplitudeAssignmentTracker(apiKey, assignmentConfiguration)
+    private val assignmentTracker = AmplitudeAssignmentTracker(apiKey, configuration.assignmentConfiguration)
     private val deploymentApi = DeploymentApiV1()
-    private val deploymentStorage = if (redisConfiguration?.redisUrl == null) {
+    private val deploymentStorage = if (configuration.redisConfiguration?.redisUrl == null) {
         InMemoryDeploymentStorage()
     } else {
-        RedisDeploymentStorage(redisConfiguration)
+        RedisDeploymentStorage(configuration.redisConfiguration)
     }
     private val cohortApi = CohortApiV5(apiKey = apiKey, secretKey = secretKey)
-    private val cohortStorage = if (redisConfiguration == null) {
+    private val cohortStorage = if (configuration.redisConfiguration == null) {
         InMemoryCohortStorage()
     } else {
         RedisCohortStorage(
-            redisConfiguration,
-            projectConfiguration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
+            configuration.redisConfiguration,
+            configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
         )
     }
     private val projectRunner = ProjectRunner(
-        projectConfiguration,
+        configuration,
         deploymentApi,
         deploymentStorage,
         cohortApi,

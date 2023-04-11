@@ -1,13 +1,11 @@
 package com.amplitude
 
-import com.amplitude.assignment.AssignmentConfiguration
 import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.serialization.SerialExperimentUser
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.RedisConfiguration
 import com.amplitude.util.json
-import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -29,7 +27,6 @@ import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
-import project.ProjectConfiguration
 import java.util.Base64
 
 fun main() {
@@ -43,14 +40,14 @@ fun main() {
         }
 
         val assignmentConfiguration = AssignmentConfiguration.fromEnv()
-        val projectConfiguration = ProjectConfiguration.fromEnv()
+        val configuration = Configuration.fromEnv()
         val redisConfiguration = RedisConfiguration.fromEnv()
 
         val evaluationProxy = EvaluationProxy(
             apiKey = apiKey,
             secretKey = secretKey,
             deploymentKeys = deploymentKeys,
-            projectConfiguration = projectConfiguration,
+            configuration = configuration,
             assignmentConfiguration = assignmentConfiguration,
             redisConfiguration = redisConfiguration,
         )

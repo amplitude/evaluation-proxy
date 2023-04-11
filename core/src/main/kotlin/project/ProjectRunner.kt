@@ -1,5 +1,6 @@
 package com.amplitude.project
 
+import com.amplitude.Configuration
 import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage
@@ -18,10 +19,9 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import project.ProjectConfiguration
 
 class ProjectRunner(
-    @Volatile var configuration: ProjectConfiguration,
+    @Volatile var configuration: Configuration,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
