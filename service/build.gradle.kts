@@ -4,19 +4,13 @@ plugins {
     application
     id("io.ktor.plugin") version "2.2.4"
     kotlin("jvm") version "1.8.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.0"
+    kotlin("plugin.serialization") version "1.8.0"
 }
 
 application {
     mainClass.set("com.amplitude.ServerKt")
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
-}
-
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
 }
 
 java {
@@ -37,7 +31,7 @@ val prometheusVersion: String by project
 val serializationVersion: String by project
 
 dependencies {
-    implementation(project(":evaluation-proxy-core"))
+    implementation(project(":core"))
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")

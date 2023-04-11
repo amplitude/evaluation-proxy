@@ -1,5 +1,5 @@
 rootProject.name = "evaluation-proxy"
 include(
-    "evaluation-proxy-core",
-    "evaluation-proxy-service"
+    "core",
+    "service"
 )

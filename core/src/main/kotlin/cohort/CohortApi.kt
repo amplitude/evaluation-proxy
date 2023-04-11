@@ -117,7 +117,6 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
         log.debug("getCohortMembers: requestId=${getCohortResponse.requestId}")
         // Poll until the cohort is ready for download
         while (true) {
-            delay(1000)
             val statusResponse =
                 client.get("https://amplitude.com/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
@@ -128,6 +127,7 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
             } else if (statusResponse.status != HttpStatusCode.Accepted) {
                 throw HttpErrorResponseException(statusResponse.status)
             }
+            delay(1000)
         }
         // Download the cohort
         val downloadResponse =

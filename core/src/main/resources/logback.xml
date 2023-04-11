@@ -1,0 +1,15 @@
+<configuration>
+    <variable name="AMPLITUDE_LOG_LEVEL" value="${AMPLITUDE_LOG_LEVEL:-INFO}" />
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <root level="${AMPLITUDE_LOG_LEVEL}">
+        <appender-ref ref="STDOUT"/>
+    </root>
+<!--    <logger name="io.lettuce" level="INFO"/>-->
+<!--    <logger name="org.eclipse.jetty" level="INFO"/>-->
+<!--    <logger name="io.netty" level="INFO"/>-->
+<!--    <logger name="com.amplitude" level="INFO"/>-->
+</configuration>

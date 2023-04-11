@@ -33,32 +33,32 @@ import project.ProjectConfiguration
 import java.util.Base64
 
 fun main() {
-
-    val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
-    val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
-    val deploymentKeys = mutableSetOf<String>()
-    stringEnv("AMPLITUDE_DEPLOYMENT_KEY")?.let { deploymentKey ->
-        deploymentKeys.add(deploymentKey)
-    }
-
-    val assignmentConfiguration = AssignmentConfiguration.fromEnv()
-    val projectConfiguration = ProjectConfiguration.fromEnv()
-    val redisConfiguration = RedisConfiguration.fromEnv()
-
-    val evaluationProxy = EvaluationProxy(
-        apiKey = apiKey,
-        secretKey = secretKey,
-        deploymentKeys = deploymentKeys,
-        projectConfiguration = projectConfiguration,
-        assignmentConfiguration = assignmentConfiguration,
-        redisConfiguration = redisConfiguration,
-    )
-
-    runBlocking {
-        evaluationProxy.start()
-    }
-
     embeddedServer(Netty, port = 3546, host = "0.0.0.0") {
+
+        val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
+        val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
+        val deploymentKeys = mutableSetOf<String>()
+        stringEnv("AMPLITUDE_DEPLOYMENT_KEY")?.let { deploymentKey ->
+            deploymentKeys.add(deploymentKey)
+        }
+
+        val assignmentConfiguration = AssignmentConfiguration.fromEnv()
+        val projectConfiguration = ProjectConfiguration.fromEnv()
+        val redisConfiguration = RedisConfiguration.fromEnv()
+
+        val evaluationProxy = EvaluationProxy(
+            apiKey = apiKey,
+            secretKey = secretKey,
+            deploymentKeys = deploymentKeys,
+            projectConfiguration = projectConfiguration,
+            assignmentConfiguration = assignmentConfiguration,
+            redisConfiguration = redisConfiguration,
+        )
+
+        runBlocking {
+            evaluationProxy.start()
+        }
+
         configureLogging()
         configureMetrics()
         install(ContentNegotiation) {
