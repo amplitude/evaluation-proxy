@@ -29,7 +29,6 @@ class DeploymentRunner(
     suspend fun start() {
         log.debug("start: - deploymentKey=$deploymentKey")
         deploymentLoader.loadDeployment(deploymentKey)
-        log.debug("start: loaded deployment - deploymentKey=$deploymentKey")
         // Periodic flag config loader
         scope.launch {
             while (true) {

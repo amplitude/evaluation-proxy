@@ -4,11 +4,12 @@ import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.serialization.SerialExperimentUser
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
-import com.amplitude.util.RedisConfiguration
 import com.amplitude.util.json
+import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
@@ -19,49 +20,56 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
-import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
-import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
+import java.io.FileNotFoundException
 import java.util.Base64
 
 fun main() {
-    embeddedServer(Netty, port = 3546, host = "0.0.0.0") {
 
-        val apiKey = checkNotNull(stringEnv("AMPLITUDE_API_KEY"))
-        val secretKey = checkNotNull(stringEnv("AMPLITUDE_SECRET_KEY"))
-        val deploymentKeys = mutableSetOf<String>()
-        stringEnv("AMPLITUDE_DEPLOYMENT_KEY")?.let { deploymentKey ->
-            deploymentKeys.add(deploymentKey)
-        }
+    val log = logger("Service")
 
-        val assignmentConfiguration = AssignmentConfiguration.fromEnv()
-        val configuration = Configuration.fromEnv()
-        val redisConfiguration = RedisConfiguration.fromEnv()
+    /*
+     * Load the evaluation proxies configuration.
+     *
+     * The PROXY_CONFIG_FILE_PATH environment variable determines whether to load config from a file or environment
+     * variables.
+     */
+    val proxyConfigFilePath = stringEnv("PROXY_CONFIG_FILE_PATH", "/etc/evaluation-proxy-config.yaml")!!
+    val configFile = try {
+        ConfigurationFile.fromFile(proxyConfigFilePath)
+    } catch (file: FileNotFoundException) {
+        log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
+        ConfigurationFile.fromEnv()
+    }
 
+    /*
+     * Start the server.
+     */
+    embeddedServer(Netty, port = configFile.configuration.port, host = "0.0.0.0") {
+        /*
+         * Initialize and start the evaluation proxy.
+         */
         val evaluationProxy = EvaluationProxy(
-            apiKey = apiKey,
-            secretKey = secretKey,
-            deploymentKeys = deploymentKeys,
-            configuration = configuration,
-            assignmentConfiguration = assignmentConfiguration,
-            redisConfiguration = redisConfiguration,
+            configFile.projects,
+            configFile.configuration
         )
-
         runBlocking {
             evaluationProxy.start()
         }
 
+        /*
+         * Configure ktor plugins.
+         */
         configureLogging()
         configureMetrics()
         install(ContentNegotiation) {
             json()
         }
-        // Custom shutdown plugin
         install(
             createApplicationPlugin("shutdown") {
                 val plugin = ShutDownUrl("/shutdown") { 0 }
@@ -73,32 +81,11 @@ fun main() {
                 }
             }
         )
+
+        /*
+         * Configure endpoints.
+         */
         routing {
-            get("/api/v1/deployments") {
-                call.respond(evaluationProxy.getSerializedDeployments())
-            }
-
-            put("/api/v1/deployments/{deployment}") {
-                val deployment = this.call.parameters["deployment"]
-                try {
-                    evaluationProxy.addDeployment(deployment)
-                } catch (e: HttpErrorResponseException) {
-                    call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                    return@put
-                }
-                call.respond(HttpStatusCode.OK)
-            }
-
-            delete("/api/v1/deployments/{deployment}") {
-                val deployment = this.call.parameters["deployment"]
-                try {
-                    evaluationProxy.removeDeployment(deployment)
-                } catch (e: HttpErrorResponseException) {
-                    call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                    return@delete
-                }
-                call.respond(HttpStatusCode.OK)
-            }
 
             get("/sdk/v1/deployments/{deployment}/flags") {
                 val deployment = this.call.parameters["deployment"]
@@ -124,46 +111,40 @@ fun main() {
             }
 
             get("/sdk/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getDeploymentKey()
-                val user = call.request.getUserFromHeader()
-                val flagKeys = call.request.getFlagKeys()
-                val result = evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-                call.respond(result)
+                call.evaluate(evaluationProxy, ApplicationRequest::getUserFromHeader)
             }
 
             post("/sdk/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getDeploymentKey()
-                val user = call.request.getUserFromBody()
-                val flagKeys = call.request.getFlagKeys()
-                val result = evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-                call.respond(result)
+                call.evaluate(evaluationProxy, ApplicationRequest::getUserFromBody)
             }
 
             get("/v1/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getDeploymentKey()
-                val user = call.request.getUserFromQuery()
-                val flagKeys = call.request.getFlagKeys()
-                val result = evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-                call.respond(result)
+                call.evaluate(evaluationProxy, ApplicationRequest::getUserFromQuery)
             }
 
             post("/v1/vardata") {
-                // Deployment key is included in Authorization header with prefix "Api-Key "
-                val deploymentKey = call.request.getDeploymentKey()
-                val user = call.request.getUserFromBody()
-                val flagKeys = call.request.getFlagKeys()
-                val result = evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-                call.respond(result)
+                call.evaluate(evaluationProxy, ApplicationRequest::getUserFromBody)
             }
         }
     }.start(wait = true)
 }
 
+suspend fun ApplicationCall.evaluate(evaluationProxy: EvaluationProxy, userProvider: suspend ApplicationRequest.() -> SkylabUser) {
+    val result = try {
+        // Deployment key is included in Authorization header with prefix "Api-Key "
+        val deploymentKey = request.getDeploymentKey()
+        val user = request.userProvider()
+        val flagKeys = request.getFlagKeys()
+        evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
+    } catch (e: HttpErrorResponseException) {
+        respond(HttpStatusCode.fromValue(e.status), e.message)
+        return
+    }
+    respond(result)
+}
+
 /**
- * Get the deployment key from the call, included in Authorization header with prefix "Api-Key "
+ * Get the deployment key from the request, included in Authorization header with prefix "Api-Key "
  */
 private fun ApplicationRequest.getDeploymentKey(): String? {
     val deploymentKey = this.headers["Authorization"]

@@ -19,11 +19,11 @@ class CohortLoader(
     private val jobsMutex = Mutex()
     private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun loadCohorts(cohortIds: Set<String>) = coroutineScope {
+    suspend fun loadCohorts(cohortIds: Set<String>, state: Set<String> = cohortIds) = coroutineScope {
         log.debug("loadCohorts: start - cohortIds=$cohortIds")
 
         // Get cohort descriptions from storage and network.
-        val networkCohortDescriptions = cohortApi.getCohortDescriptions()
+        val networkCohortDescriptions = cohortApi.getCohortDescriptions(state)
 
         // Filter cohorts received from network. Removes cohorts which are:
         //   1. Not requested for management by this function.
@@ -35,12 +35,14 @@ class CohortLoader(
                 networkCohortDescription.size <= maxCohortSize &&
                 networkCohortDescription.lastComputed > (storageDescription?.lastComputed ?: -1)
         }
+        log.debug("loadCohorts: filtered network descriptions - $cohorts")
 
         // Download and store each cohort if a download job has not already been started.
         for (cohort in cohorts) {
             val job = jobsMutex.withLock {
                 jobs.getOrPut(cohort.id) {
                     launch {
+                        log.info("Downloading cohort. $cohort")
                         val cohortMembers = cohortApi.getCohortMembers(cohort)
                         cohortStorage.putCohort(cohort, cohortMembers)
                         jobsMutex.withLock { jobs.remove(cohort.id) }

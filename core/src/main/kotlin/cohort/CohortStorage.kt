@@ -1,7 +1,7 @@
 package com.amplitude.cohort
 
-import com.amplitude.util.Redis
-import com.amplitude.util.RedisConfiguration
+import com.amplitude.RedisConfiguration
+import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
@@ -16,6 +16,14 @@ interface CohortStorage {
     suspend fun getCohortMembershipsForUser(userId: String, cohortIds: Set<String>? = null): Set<String>
     suspend fun putCohort(description: CohortDescription, members: Set<String>)
     suspend fun removeCohort(cohortDescription: CohortDescription)
+}
+
+fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?, ttl: Duration): CohortStorage {
+    return if (redisConfiguration == null) {
+        InMemoryCohortStorage()
+    } else {
+        RedisCohortStorage(projectId, redisConfiguration, ttl)
+    }
 }
 
 class InMemoryCohortStorage : CohortStorage {
@@ -57,19 +65,21 @@ class InMemoryCohortStorage : CohortStorage {
 }
 
 class RedisCohortStorage(
+    private val projectId: String,
     redisConfiguration: RedisConfiguration,
     private val ttl: Duration
 ) : CohortStorage {
 
-    private val redis = Redis(redisConfiguration)
+    private val redis = RedisConnection(redisConfiguration.uri, redisConfiguration.prefix)
+    private val readOnlyRedis = RedisConnection(redisConfiguration.readOnlyUri, redisConfiguration.prefix)
 
     override suspend fun getCohortDescription(cohortId: String): CohortDescription? {
-        val jsonEncodedDescription = redis.hget(RedisKey.CohortDescriptions, cohortId) ?: return null
+        val jsonEncodedDescription = redis.hget(RedisKey.CohortDescriptions(projectId), cohortId) ?: return null
         return json.decodeFromString(jsonEncodedDescription)
     }
 
     override suspend fun getCohortDescriptions(): Map<String, CohortDescription> {
-        val jsonEncodedDescriptions = redis.hgetall(RedisKey.CohortDescriptions)
+        val jsonEncodedDescriptions = redis.hgetall(RedisKey.CohortDescriptions(projectId))
         return jsonEncodedDescriptions?.mapValues { json.decodeFromString(it.value) } ?: mapOf()
     }
 
@@ -77,7 +87,8 @@ class RedisCohortStorage(
         val descriptions = getCohortDescriptions()
         val memberships = mutableSetOf<String>()
         for (description in descriptions.values) {
-            val isMember = redis.sismember(RedisKey.CohortMembers(description), userId)
+            // High volume, use read connection
+            val isMember = readOnlyRedis.sismember(RedisKey.CohortMembers(projectId, description), userId)
             if (isMember) {
                 memberships += description.id
             }
@@ -89,16 +100,16 @@ class RedisCohortStorage(
         val jsonEncodedDescription = json.encodeToString(description)
         val existingDescription = getCohortDescription(description.id)
         if ((existingDescription?.lastComputed ?: 0L) < description.lastComputed) {
-            redis.sadd(RedisKey.CohortMembers(description), members)
-            redis.hset(RedisKey.CohortDescriptions, mapOf(description.id to jsonEncodedDescription))
+            redis.sadd(RedisKey.CohortMembers(projectId, description), members)
+            redis.hset(RedisKey.CohortDescriptions(projectId), mapOf(description.id to jsonEncodedDescription))
             if (existingDescription != null) {
-                redis.expire(RedisKey.CohortMembers(existingDescription), ttl)
+                redis.expire(RedisKey.CohortMembers(projectId, existingDescription), ttl)
             }
         }
     }
 
     override suspend fun removeCohort(cohortDescription: CohortDescription) {
-        redis.hdel(RedisKey.CohortDescriptions, cohortDescription.id)
-        redis.del(RedisKey.CohortMembers(cohortDescription))
+        redis.hdel(RedisKey.CohortDescriptions(projectId), cohortDescription.id)
+        redis.del(RedisKey.CohortMembers(projectId, cohortDescription))
     }
 }

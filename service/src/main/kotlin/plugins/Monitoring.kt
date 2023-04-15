@@ -12,6 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
+import org.slf4j.event.Level
 
 /**
  * Install the logging plugin and sets the level for logging each call.
@@ -19,6 +20,7 @@ import io.micrometer.prometheus.PrometheusMeterRegistry
 fun Application.configureLogging() {
     install(CallLogging) {
         filter { call -> call.request.path().startsWith("/") }
+        level = Level.DEBUG
     }
 }
 

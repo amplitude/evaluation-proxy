@@ -23,7 +23,7 @@ class DeploymentLoader(
     private val jobs = mutableMapOf<String, Job>()
 
     suspend fun loadDeployment(deploymentKey: String) = coroutineScope {
-        log.debug("loadDeployment: start - deploymentKey=$deploymentKey")
+        log.debug("loadDeployment: - deploymentKey=$deploymentKey")
         jobsMutex.withLock {
             jobs.getOrPut(deploymentKey) {
                 launch {
@@ -32,7 +32,9 @@ class DeploymentLoader(
                     val networkCohortIds = networkFlagConfigs.getCohortIds()
                     val storageCohortIds = storageFlagConfigs.getCohortIds()
                     val addedCohortIds = networkCohortIds - storageCohortIds
-                    cohortLoader.loadCohorts(addedCohortIds)
+                    if (addedCohortIds.isNotEmpty()) {
+                        cohortLoader.loadCohorts(addedCohortIds, networkCohortIds)
+                    }
                     deploymentStorage.putFlagConfigs(deploymentKey, networkFlagConfigs)
                     jobs.remove(deploymentKey)
                 }

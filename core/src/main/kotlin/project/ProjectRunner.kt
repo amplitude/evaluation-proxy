@@ -1,6 +1,7 @@
 package com.amplitude.project
 
 import com.amplitude.Configuration
+import com.amplitude.Project
 import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage
@@ -21,7 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class ProjectRunner(
-    @Volatile var configuration: Configuration,
+    private val configuration: Configuration,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
@@ -40,7 +41,6 @@ class ProjectRunner(
     private val cohortLoader = CohortLoader(configuration.maxCohortSize, cohortApi, cohortStorage)
 
     suspend fun start() {
-        log.debug("start")
         refresh(deploymentStorage.getDeployments())
         // Collect deployment updates from the storage
         scope.launch {
@@ -59,7 +59,6 @@ class ProjectRunner(
     }
 
     suspend fun stop() {
-        log.debug("stop")
         lock.withLock {
             for (deploymentRunner in deploymentRunners.values) {
                 deploymentRunner.stop()
@@ -88,7 +87,7 @@ class ProjectRunner(
     }
 
     private suspend fun addDeployment(deploymentKey: String) {
-        log.debug("addDeployment: start - deploymentKey=$deploymentKey")
+        log.info("Adding deployment $deploymentKey")
         val deploymentRunner = DeploymentRunner(
             configuration,
             deploymentKey,
@@ -98,14 +97,12 @@ class ProjectRunner(
         )
         deploymentRunner.start()
         deploymentRunners[deploymentKey] = deploymentRunner
-        log.debug("addDeployment: end - deploymentKey=$deploymentKey")
     }
 
     private suspend fun removeDeployment(deploymentKey: String) {
-        log.debug("removeDeployment: start - deploymentKey=$deploymentKey")
+        log.info("Removing deployment $deploymentKey")
         deploymentRunners.remove(deploymentKey)?.stop()
         deploymentStorage.removeFlagConfigs(deploymentKey)
-        log.debug("removeDeployment: end - deploymentKey=$deploymentKey")
     }
 
     private suspend fun removeUnusedCohorts(deploymentKeys: Set<String>) {
@@ -117,7 +114,7 @@ class ProjectRunner(
         val allStoredCohortDescriptions = cohortStorage.getCohortDescriptions().values
         for (cohortDescription in allStoredCohortDescriptions) {
             if (!allTargetedCohortIds.contains(cohortDescription.id)) {
-                log.info("Removing unused cohort: $cohortDescription")
+                log.info("Removing unused cohort $cohortDescription")
                 cohortStorage.removeCohort(cohortDescription)
             }
         }

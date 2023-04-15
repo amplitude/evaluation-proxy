@@ -46,7 +46,7 @@ private data class GetCohortMembersResponse(
 )
 
 interface CohortApi {
-    suspend fun getCohortDescriptions(): List<CohortDescription>
+    suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription>
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>
 }
 
@@ -63,8 +63,8 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
         }
     }
 
-    override suspend fun getCohortDescriptions(): List<CohortDescription> =
-        client.getCohortDescriptions(basicAuth)
+    override suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription> =
+        client.getCohortDescriptions(basicAuth, cohortIds)
 
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
@@ -103,8 +103,8 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
         }
     }
 
-    override suspend fun getCohortDescriptions(): List<CohortDescription> =
-        client.getCohortDescriptions(basicAuth)
+    override suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription> =
+        client.getCohortDescriptions(basicAuth, cohortIds)
 
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
@@ -140,11 +140,12 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
     }
 }
 
-private suspend fun HttpClient.getCohortDescriptions(basicAuth: String): List<CohortDescription> {
+private suspend fun HttpClient.getCohortDescriptions(basicAuth: String, cohortIds: Set<String>): List<CohortDescription> {
     CohortApiV5.log.debug("getCohortDescriptions: start")
     val response = retry(onFailure = { e -> CohortApiV5.log.info("Get cohort descriptions failed: $e") }) {
         get("https://cohort.lab.amplitude.com/api/3/cohorts") {
             headers { set("Authorization", "Basic $basicAuth") }
+            parameter("cohorts", cohortIds.sorted().joinToString())
         }
     }
     val body = json.decodeFromString<GetCohortDescriptionsResponse>(response.body())

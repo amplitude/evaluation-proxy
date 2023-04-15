@@ -24,6 +24,7 @@ val amplitudeAnalytics: String by project
 val amplitudeAnalyticsJson: String by project
 val lettuce: String by project
 val apacheCommons: String by project
+val kaml: String by project
 
 dependencies {
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
@@ -33,6 +34,7 @@ dependencies {
     implementation("io.lettuce:lettuce-core:$lettuce")
     implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    implementation("com.charleskorn.kaml:kaml:$kaml")
     implementation("org.apache.commons:commons-csv:$apacheCommons")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }

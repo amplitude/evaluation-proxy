@@ -1,11 +1,10 @@
 package com.amplitude.deployment
 
+import com.amplitude.RedisConfiguration
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
-import com.amplitude.util.Redis
-import com.amplitude.util.RedisConfiguration
+import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
-import com.amplitude.util.getCohortIds
 import com.amplitude.util.json
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +22,14 @@ interface DeploymentStorage {
     suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>?
     suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>)
     suspend fun removeFlagConfigs(deploymentKey: String)
+}
+
+fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
+    return if (redisConfiguration == null) {
+        InMemoryDeploymentStorage()
+    } else {
+        RedisDeploymentStorage(projectId, redisConfiguration)
+    }
 }
 
 class InMemoryDeploymentStorage : DeploymentStorage {
@@ -75,10 +82,12 @@ class InMemoryDeploymentStorage : DeploymentStorage {
 }
 
 class RedisDeploymentStorage(
+    private val projectId: String,
     redisConfiguration: RedisConfiguration
 ) : DeploymentStorage {
 
-    private val redis = Redis(redisConfiguration)
+    private val redis = RedisConnection(redisConfiguration.uri, redisConfiguration.prefix)
+    private val readOnlyRedis = RedisConnection(redisConfiguration.readOnlyUri, redisConfiguration.prefix)
 
     // TODO Could be optimized w/ pub sub
     override val deployments = MutableSharedFlow<Set<String>>(
@@ -90,21 +99,22 @@ class RedisDeploymentStorage(
     private var flagConfigCache: List<FlagConfig>? = null
 
     override suspend fun getDeployments(): Set<String> {
-        return redis.smembers(RedisKey.Deployments) ?: emptySet()
+        return redis.smembers(RedisKey.Deployments(projectId)) ?: emptySet()
     }
 
     override suspend fun putDeployment(deploymentKey: String) {
-        redis.sadd(RedisKey.Deployments, deploymentKey)
+        redis.sadd(RedisKey.Deployments(projectId), setOf(deploymentKey))
         deployments.emit(getDeployments())
     }
 
     override suspend fun removeDeployment(deploymentKey: String) {
-        redis.srem(RedisKey.Deployments, deploymentKey)
+        redis.srem(RedisKey.Deployments(projectId), deploymentKey)
         deployments.emit(getDeployments())
     }
 
     override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>? {
-        val jsonEncodedFlags = redis.get(RedisKey.FlagConfigs(deploymentKey)) ?: return null
+        // High volume, use read only redis
+        val jsonEncodedFlags = readOnlyRedis.get(RedisKey.FlagConfigs(projectId, deploymentKey)) ?: return null
         return json.decodeFromString<List<SerialFlagConfig>>(jsonEncodedFlags).map { it.convert() }
     }
 
@@ -120,11 +130,11 @@ class RedisDeploymentStorage(
         }
         if (changed) {
             val jsonEncodedFlags = json.encodeToString(flagConfigs.map { SerialFlagConfig(it) })
-            redis.set(RedisKey.FlagConfigs(deploymentKey), jsonEncodedFlags)
+            redis.set(RedisKey.FlagConfigs(projectId, deploymentKey), jsonEncodedFlags)
         }
     }
 
     override suspend fun removeFlagConfigs(deploymentKey: String) {
-        redis.del(RedisKey.FlagConfigs(deploymentKey))
+        redis.del(RedisKey.FlagConfigs(projectId, deploymentKey))
     }
 }
