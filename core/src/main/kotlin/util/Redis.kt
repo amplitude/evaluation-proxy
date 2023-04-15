@@ -18,21 +18,21 @@ internal sealed class RedisKey(val value: String) {
     object Projects : RedisKey("projects")
 
     data class Deployments(
-        val projectId: String,
+        val projectId: String
     ) : RedisKey("projects:$projectId:deployments")
 
     data class FlagConfigs(
         val projectId: String,
-        val deploymentKey: String,
+        val deploymentKey: String
     ) : RedisKey("projects:$projectId:deployments:$deploymentKey:flags")
 
     data class CohortDescriptions(
-        val projectId: String,
+        val projectId: String
     ) : RedisKey("projects:$projectId:cohorts")
 
     data class CohortMembers(
         val projectId: String,
-        val cohortDescription: CohortDescription,
+        val cohortDescription: CohortDescription
     ) : RedisKey("projects:$projectId:cohorts:${cohortDescription.id}:users:${cohortDescription.lastComputed}")
 }
 
@@ -53,7 +53,7 @@ internal interface Redis {
 
 internal class RedisConnection(
     redisUri: String,
-    private val redisPrefix: String,
+    private val redisPrefix: String
 ) : Redis {
 
     private val connection: Deferred<StatefulRedisConnection<String, String>>
@@ -142,6 +142,6 @@ internal class RedisConnection(
     }
 
     private fun RedisKey.getPrefixedKey(): String {
-        return "${redisPrefix}:$STORAGE_PROTOCOL_VERSION:${this.value}"
+        return "$redisPrefix:$STORAGE_PROTOCOL_VERSION:${this.value}"
     }
 }

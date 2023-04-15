@@ -5,6 +5,7 @@ plugins {
     id("io.ktor.plugin") version "2.2.4"
     kotlin("jvm") version "1.8.10"
     kotlin("plugin.serialization") version "1.8.0"
+    id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
 }
 
 application {

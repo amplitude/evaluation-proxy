@@ -23,7 +23,7 @@ import kotlin.time.toDuration
 
 class ProjectProxy(
     private val project: Project,
-    configuration: Configuration = Configuration(),
+    configuration: Configuration = Configuration()
 ) {
 
     companion object {

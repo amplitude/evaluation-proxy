@@ -9,7 +9,7 @@ import java.util.HashMap
  */
 class Cache<K, V>(
     private val capacity: Int,
-    private val ttlMillis: Long = 0,
+    private val ttlMillis: Long = 0
 ) {
 
     private class Node<K, V>(

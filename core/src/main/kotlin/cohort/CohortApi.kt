@@ -87,7 +87,7 @@ data class GetCohortAsyncResponse(
     @SerialName("cohort_id")
     val cohortId: String,
     @SerialName("request_id")
-    val requestId: String,
+    val requestId: String
 )
 
 class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {

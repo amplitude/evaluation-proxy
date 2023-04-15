@@ -5,6 +5,7 @@ plugins {
     kotlin("plugin.serialization") version "1.8.0"
     `maven-publish`
     signing
+    id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
 }
 
 java {

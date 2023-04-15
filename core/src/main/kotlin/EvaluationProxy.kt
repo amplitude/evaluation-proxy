@@ -1,7 +1,5 @@
 package com.amplitude
 
-import com.amplitude.cohort.getCohortStorage
-import com.amplitude.deployment.getDeploymentStorage
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.Variant
@@ -21,12 +19,12 @@ const val VERSION = "0.1.0"
 class HttpErrorResponseException(
     val status: Int,
     override val message: String,
-    override val cause: Exception? = null,
+    override val cause: Exception? = null
 ) : Exception(message, cause)
 
 class EvaluationProxy(
     private val projects: List<Project>,
-    private val configuration: Configuration = Configuration(),
+    private val configuration: Configuration = Configuration()
 ) {
 
     companion object {

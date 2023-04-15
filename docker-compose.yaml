@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  sevice:
+    build: .
+    ports:
+      - "3546:3546"
+    volumes:
+      - "./compose-config.yaml:/etc/evaluation-proxy-config.yaml"
+  redis:
+    image: "redis:alpine"

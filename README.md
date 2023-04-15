@@ -6,43 +6,24 @@ Service to optimize local evaluation running within your infrastructure, or supp
  * Expose local evaluation apis for SDKs and API endpoints to enable unsupported platforms and programming languages.
  * Automatically tracks assignments events for local evaluations run on the service.
 
-## Configuration
-
-The evaluation proxy requires keys as environment variables to run. Otherwise, the service will crash on startup.
-
-| Environment Variable     | Description                                                                                                        |
-|--------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `AMPLITUDE_API_KEY`        | The project's api key.                                                                                             |
-| `AMPLITUDE_SECRET_KEY`     | The project's secret key.                                                                                          |
-| `AMPLITUDE_DEPLOYMENT_KEY` | The key for the deployment to manage. Deployment key must exist within the same project as the api and secret key. |
+See the [full documentation on in the Amplitude developer docs](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy/).
 
 ## Deployment
 
 The evaluation proxy is stateless, and should be deployed with multiple instances behind a load balancer for high availability and scalability.
-For example, a kubernetes deployment with greater than one replica
+For example, a kubernetes deployment with greater than one replica.
 
-## Docker
+### Docker
 
-Service is deployed via a [docker image](https://hub.docker.com/r/amplitudeinc/evaluation-proxy).
+Service is generally deployed via a [docker image](https://hub.docker.com/r/amplitudeinc/evaluation-proxy).
 
-### Pull
-
-```
-docker pull amplitudeinc/evaluation-proxy
-```
-
-### Run
+Run the container locally with redis persistence using `docker compose`. You must first update the `compose-config.yaml` file with your project and deployment keys before running the composition.
 
 ```
-docker run \
-    -e AMPLITUDE_API_KEY=${AMPLITUDE_API_KEY} \
-    -e AMPLITUDE_SECRET_KEY=${AMPLITUDE_SECRET_KEY} \
-    -e AMPLITUDE_DEPLOYMENT_KEY=${AMPLITUDE_DEPLOYMENT_KEY} \
-    -p 3546:3546 \
-    amplitudeinc/evaluation-proxy
+docker compose up
 ```
 
-## Source
+### Source
 
 Build and run the service from source.
 

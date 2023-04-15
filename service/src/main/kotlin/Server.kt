@@ -30,18 +30,20 @@ import java.io.FileNotFoundException
 import java.util.Base64
 
 fun main() {
-
     val log = logger("Service")
 
     /*
-     * Load the evaluation proxies configuration.
+     * Load the evaluation proxy's configuration.
      *
      * The PROXY_CONFIG_FILE_PATH environment variable determines whether to load config from a file or environment
      * variables.
      */
+    log.info("Accessing proxy configuration.")
     val proxyConfigFilePath = stringEnv("PROXY_CONFIG_FILE_PATH", "/etc/evaluation-proxy-config.yaml")!!
     val configFile = try {
-        ConfigurationFile.fromFile(proxyConfigFilePath)
+        ConfigurationFile.fromFile(proxyConfigFilePath).also {
+            log.info("Found configuration file at $proxyConfigFilePath")
+        }
     } catch (file: FileNotFoundException) {
         log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
         ConfigurationFile.fromEnv()
@@ -86,7 +88,6 @@ fun main() {
          * Configure endpoints.
          */
         routing {
-
             get("/sdk/v1/deployments/{deployment}/flags") {
                 val deployment = this.call.parameters["deployment"]
                 val result = try {

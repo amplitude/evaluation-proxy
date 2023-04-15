@@ -1,7 +1,6 @@
 package com.amplitude.project
 
 import com.amplitude.Configuration
-import com.amplitude.Project
 import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage

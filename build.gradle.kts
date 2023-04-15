@@ -1,7 +1,6 @@
 plugins {
     kotlin("jvm") version "1.8.10"
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
-    id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
 }
 
 allprojects {

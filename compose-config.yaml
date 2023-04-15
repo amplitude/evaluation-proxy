@@ -1,0 +1,10 @@
+projects:
+  - id: "TODO"
+    apiKey: "TODO"
+    secretKey: "TODO"
+    deploymentKeys:
+      - "TODO"
+
+configuration:
+  redis:
+    uri: "redis://redis:6379"

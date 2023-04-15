@@ -12,7 +12,7 @@ import java.io.File
 @Serializable
 data class ConfigurationFile(
     val projects: List<Project>,
-    val configuration: Configuration = Configuration(),
+    val configuration: Configuration = Configuration()
 ) {
     companion object {
 
@@ -38,7 +38,7 @@ data class Project(
     val id: String,
     val apiKey: String,
     val secretKey: String,
-    val deploymentKeys: Set<String>,
+    val deploymentKeys: Set<String>
 ) {
     companion object {
         fun fromEnv(): Project {
@@ -111,21 +111,22 @@ data class AssignmentConfiguration(
 data class RedisConfiguration(
     val uri: String,
     val readOnlyUri: String,
-    val prefix: String,
+    val prefix: String
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
             val redisUri = stringEnv(EnvKey.REDIS_URI, Default.REDIS_URI)
-            if (redisUri != null) {
+            return if (redisUri != null) {
                 val redisReadOnlyUri = stringEnv(EnvKey.REDIS_READ_ONLY_URI, Default.REDIS_READ_ONLY_URI) ?: redisUri
                 val redisPrefix = stringEnv(EnvKey.REDIS_PREFIX, Default.REDIS_PREFIX)!!
-                return RedisConfiguration(
+                RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
                     prefix = redisPrefix
                 )
+            } else {
+                null
             }
-            return null
         }
     }
 }

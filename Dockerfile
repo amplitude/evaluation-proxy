@@ -6,5 +6,5 @@ RUN gradle buildFatJar --no-daemon
 FROM openjdk:17-alpine
 EXPOSE 3546:3546
 RUN mkdir /amp
-COPY --from=build /home/gradle/src/build/libs/*-all.jar /amp/evaluation-proxy.jar
-ENTRYPOINT ["java","-jar","/app/evaluation-proxy.jar"]
+COPY --from=build /home/gradle/src/service/build/libs/service-all.jar /amp/evaluation-proxy.jar
+ENTRYPOINT ["java","-jar","/amp/evaluation-proxy.jar"]
