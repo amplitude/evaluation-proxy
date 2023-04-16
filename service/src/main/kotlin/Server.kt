@@ -126,6 +126,9 @@ fun main() {
             post("/v1/vardata") {
                 call.evaluate(evaluationProxy, ApplicationRequest::getUserFromBody)
             }
+            get("/status") {
+                call.respond("OK")
+            }
         }
     }.start(wait = true)
 }
