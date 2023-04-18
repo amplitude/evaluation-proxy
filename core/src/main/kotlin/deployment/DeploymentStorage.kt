@@ -1,6 +1,8 @@
 package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
+import com.amplitude.cohort.InMemoryCohortStorage
+import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.util.RedisConnection
@@ -25,10 +27,13 @@ interface DeploymentStorage {
 }
 
 fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
-    return if (redisConfiguration == null) {
+    val uri = redisConfiguration?.uri
+    val readOnlyUri = redisConfiguration?.readOnlyUri ?: uri
+    val prefix = redisConfiguration?.prefix
+    return if (uri == null || readOnlyUri == null || prefix == null) {
         InMemoryDeploymentStorage()
     } else {
-        RedisDeploymentStorage(projectId, redisConfiguration)
+        RedisDeploymentStorage(uri, readOnlyUri, prefix, projectId)
     }
 }
 
@@ -82,12 +87,14 @@ class InMemoryDeploymentStorage : DeploymentStorage {
 }
 
 class RedisDeploymentStorage(
+    uri: String,
+    readOnlyUri: String,
+    prefix: String,
     private val projectId: String,
-    redisConfiguration: RedisConfiguration
 ) : DeploymentStorage {
 
-    private val redis = RedisConnection(redisConfiguration.uri, redisConfiguration.prefix)
-    private val readOnlyRedis = RedisConnection(redisConfiguration.readOnlyUri, redisConfiguration.prefix)
+    private val redis = RedisConnection(uri, prefix)
+    private val readOnlyRedis = RedisConnection(readOnlyUri, prefix)
 
     // TODO Could be optimized w/ pub sub
     override val deployments = MutableSharedFlow<Set<String>>(

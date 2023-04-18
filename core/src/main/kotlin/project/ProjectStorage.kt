@@ -17,10 +17,12 @@ interface ProjectStorage {
 }
 
 fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
-    return if (redisConfiguration == null) {
+    val uri = redisConfiguration?.uri
+    val prefix = redisConfiguration?.prefix
+    return if (uri == null || prefix == null) {
         InMemoryProjectStorage()
     } else {
-        RedisProjectStorage(redisConfiguration)
+        RedisProjectStorage(uri, prefix)
     }
 }
 
@@ -50,10 +52,11 @@ class InMemoryProjectStorage : ProjectStorage {
 }
 
 class RedisProjectStorage(
-    redisConfiguration: RedisConfiguration
+    uri: String,
+    prefix: String,
 ) : ProjectStorage {
 
-    private val redis = RedisConnection(redisConfiguration.uri, redisConfiguration.prefix)
+    private val redis = RedisConnection(uri, prefix)
 
     override val projects = MutableSharedFlow<Set<String>>(
         extraBufferCapacity = 1,

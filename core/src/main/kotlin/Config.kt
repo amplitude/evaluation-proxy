@@ -109,9 +109,9 @@ data class AssignmentConfiguration(
 
 @Serializable
 data class RedisConfiguration(
-    val uri: String,
-    val readOnlyUri: String,
-    val prefix: String
+    val uri: String? = null,
+    val readOnlyUri: String? = uri,
+    val prefix: String = Default.REDIS_PREFIX
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {

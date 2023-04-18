@@ -19,10 +19,13 @@ interface CohortStorage {
 }
 
 fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?, ttl: Duration): CohortStorage {
-    return if (redisConfiguration == null) {
+    val uri = redisConfiguration?.uri
+    val readOnlyUri = redisConfiguration?.readOnlyUri ?: uri
+    val prefix = redisConfiguration?.prefix
+    return if (uri == null || readOnlyUri == null || prefix == null) {
         InMemoryCohortStorage()
     } else {
-        RedisCohortStorage(projectId, redisConfiguration, ttl)
+        RedisCohortStorage(uri, readOnlyUri, prefix, projectId, ttl)
     }
 }
 
@@ -65,13 +68,15 @@ class InMemoryCohortStorage : CohortStorage {
 }
 
 class RedisCohortStorage(
+    uri: String,
+    readOnlyUri: String,
+    prefix: String,
     private val projectId: String,
-    redisConfiguration: RedisConfiguration,
     private val ttl: Duration
 ) : CohortStorage {
 
-    private val redis = RedisConnection(redisConfiguration.uri, redisConfiguration.prefix)
-    private val readOnlyRedis = RedisConnection(redisConfiguration.readOnlyUri, redisConfiguration.prefix)
+    private val redis = RedisConnection(uri, prefix)
+    private val readOnlyRedis = RedisConnection(readOnlyUri, prefix)
 
     override suspend fun getCohortDescription(cohortId: String): CohortDescription? {
         val jsonEncodedDescription = redis.hget(RedisKey.CohortDescriptions(projectId), cohortId) ?: return null
