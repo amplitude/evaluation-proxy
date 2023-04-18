@@ -13,7 +13,7 @@ See the [full documentation on in the Amplitude developer docs](https://docs.dev
 The evaluation proxy is stateless, and should be deployed with multiple instances behind a load balancer for high availability and scalability.
 For example, a kubernetes deployment with greater than one replica.
 
-### Docker
+### Docker Compose Example
 
 Service is generally deployed via a [docker image](https://hub.docker.com/r/amplitudeinc/evaluation-proxy).
 
@@ -21,20 +21,6 @@ Run the container locally with redis persistence using `docker compose`. You mus
 
 ```
 docker compose up
-```
-
-### Source
-
-Build and run the service from source.
-
-### Build
-```
-./gradlew assemble
-```
-
-### Run
-```
-./gradlew run
 ```
 
 
