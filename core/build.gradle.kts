@@ -42,39 +42,42 @@ dependencies {
 
 // Publishing
 
-val javadocJar by tasks.registering(Jar::class) {
-    archiveClassifier.set("javadoc")
+java {
+    withSourcesJar()
+    withJavadocJar()
 }
 
 publishing {
     @Suppress("LocalVariableName")
-    publications.withType<MavenPublication> {
-        groupId = "com.amplitude"
-        artifactId = "evaluation-proxy-core"
-        version = "0.0.2"
-        artifact(javadocJar)
-        pom {
-            name.set("Amplitude Evaluation Proxy")
-            description.set("Core package for Amplitude's evaluation proxy.")
-            url.set("https://github.com/amplitude/evaluation-proxy")
-            licenses {
-                license {
-                    name.set("MIT")
-                    url.set("https://opensource.org/licenses/MIT")
-                    distribution.set("repo")
-                }
-            }
-            developers {
-                developer {
-                    id.set("amplitude")
-                    name.set("Amplitude")
-                    email.set("dev@amplitude.com")
-                }
-            }
-            scm {
+    publications {
+        create<MavenPublication>("core") {
+            groupId = "com.amplitude"
+            artifactId = "evaluation-proxy-core"
+            version = "0.0.2"
+            from(components["java"])
+            pom {
+                name.set("Amplitude Evaluation Proxy")
+                description.set("Core package for Amplitude's evaluation proxy.")
                 url.set("https://github.com/amplitude/evaluation-proxy")
-                connection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
-                developerConnection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
+                licenses {
+                    license {
+                        name.set("MIT")
+                        url.set("https://opensource.org/licenses/MIT")
+                        distribution.set("repo")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("amplitude")
+                        name.set("Amplitude")
+                        email.set("dev@amplitude.com")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/amplitude/evaluation-proxy")
+                    connection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
+                    developerConnection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
+                }
             }
         }
     }
@@ -82,10 +85,9 @@ publishing {
 
 signing {
     val publishing = extensions.findByType<PublishingExtension>()
-    val signingKeyId = System.getenv("SIGNING_KEY_ID")
     val signingKey = System.getenv("SIGNING_KEY")
     val signingPassword = System.getenv("SIGNING_PASSWORD")
-    useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+    useInMemoryPgpKeys(signingKey, signingPassword)
     sign(publishing?.publications)
 }
 
