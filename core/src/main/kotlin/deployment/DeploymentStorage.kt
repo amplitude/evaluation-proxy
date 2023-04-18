@@ -1,8 +1,6 @@
 package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
-import com.amplitude.cohort.InMemoryCohortStorage
-import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
 import com.amplitude.util.RedisConnection
@@ -90,7 +88,7 @@ class RedisDeploymentStorage(
     uri: String,
     readOnlyUri: String,
     prefix: String,
-    private val projectId: String,
+    private val projectId: String
 ) : DeploymentStorage {
 
     private val redis = RedisConnection(uri, prefix)

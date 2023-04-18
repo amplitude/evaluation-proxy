@@ -53,7 +53,7 @@ class InMemoryProjectStorage : ProjectStorage {
 
 class RedisProjectStorage(
     uri: String,
-    prefix: String,
+    prefix: String
 ) : ProjectStorage {
 
     private val redis = RedisConnection(uri, prefix)
