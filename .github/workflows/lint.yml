@@ -20,4 +20,4 @@ jobs:
           java-version: '17'
 
       - name: Lint
-        run: ./gradlew ktlintCheck
+        run: ./gradlew ktlintCheck --info
