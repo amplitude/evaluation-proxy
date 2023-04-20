@@ -43,7 +43,7 @@ jobs:
         run: ./gradlew assemble
 
       - name: Test
-        run: ./gradlew allTests --info
+        run: ./gradlew test --info
 
       # SET VERSIONS
 
@@ -83,17 +83,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Get BUILD_DATE
+      - name: Get Build Date
         run: |
           echo "BUILD_DATE=$( date -u +'%Y-%m-%dT%H:%M:%SZ' )" >> $GITHUB_ENV
-      - name: Docker Meta ${{ secrets.DOCKERHUB_USERNAME }}/evaluation-proxy
+
+      - name: Docker Metadata
         id: meta
         uses: docker/metadata-action@v4
         with:
           tags: type=semver,pattern={{version}},value=v${{ github.event.inputs.version }}
           images: ${{ secrets.DOCKERHUB_USERNAME }}/evaluation-proxy
 
-      - name: Docker Build and Push ${{ secrets.DOCKERHUB_USERNAME }}/evaluation-proxy
+      - name: Docker Build and Push
         uses: docker/build-push-action@v3
         with:
           context: .
