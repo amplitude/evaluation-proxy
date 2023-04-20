@@ -12,13 +12,7 @@ docker-build: build
 
 docker-run: docker-build
 	docker run \
-		-e AMPLITUDE_PROJECT_ID=${AMPLITUDE_PROJECT_ID} \
-		-e AMPLITUDE_API_KEY=${AMPLITUDE_API_KEY} \
-		-e AMPLITUDE_SECRET_KEY=${AMPLITUDE_SECRET_KEY} \
-		-e AMPLITUDE_EXPERIMENT_DEPLOYMENT_KEY=${AMPLITUDE_EXPERIMENT_DEPLOYMENT_KEY} \
-		-e AMPLITUDE_REDIS_URL=${AMPLITUDE_REDIS_URL} \
-		-e AMPLITUDE_REDIS_PREFIX=${AMPLITUDE_REDIS_PREFIX} \
-		-e AMPLITUDE_LOG_LEVEL=${AMPLITUDE_LOG_LEVEL} \
+		-v `pwd`/config.yaml:/etc/evaluation-proxy-config.yaml \
 		-p 3546:3546 experiment-local-proxy
 
 docker-compose:

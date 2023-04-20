@@ -10,10 +10,37 @@ Service to optimize local evaluation running within your infrastructure, or supp
 
 See the [full documentation on in the Amplitude developer docs](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy/).
 
+## Configuration
+
+The evaluation proxy is either configured via a `yaml` file (recommended, more configuration options), or using environment variables.
+
+The default location for the configuration yaml file is `/etc/evaluation-proxy-config.yaml`. You may also configure the file location using the `PROXY_CONFIG_FILE_PATH` environment variable.
+
+```yaml
+projects:
+  - id: "YOUR PROJECT ID"
+    apiKey: "YOUR API KEY"
+    secretKey: " YOUR SECRET KEY"
+    deploymentKeys:
+      - "YOUR DEPLOYMENT KEY 1"
+      - "YOUR DEPLOYMENT KEY 2"
+
+configuration:
+  redis:
+    uri: "YOUR REDIS URI" # e.g. "redis://localhost:6379"
+```
+
+The developer docs contain [additional information about configuration](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy#configuration).
+
+
 ## Deployment
 
 The evaluation proxy is stateless, and should be deployed with multiple instances behind a load balancer for high availability and scalability.
 For example, a kubernetes deployment with greater than one replica.
+
+### Kubernetes
+
+Use the evaluation proxy [Helm chart](https://github.com/amplitude/evaluation-proxy-helm) to install the proxy service on kubernetes or generate the files needed to deploy the service manually.
 
 ### Docker Compose Example
 
