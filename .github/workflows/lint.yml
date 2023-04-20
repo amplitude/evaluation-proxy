@@ -21,4 +21,4 @@ jobs:
           cache: gradle
 
       - name: Lint
-        run: ./gradlew ktlintCheck
+        run: ./gradlew ktlintCheck --stacktrace
