@@ -7,7 +7,7 @@ allprojects {
     group = "com.amplitude"
 
     repositories {
-        mavenLocal()
+        maven { url = uri("https://repo1.maven.org/maven2/") }
         mavenCentral()
         maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
     }
