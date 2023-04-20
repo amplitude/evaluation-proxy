@@ -1,5 +1,7 @@
 # Evaluation Proxy
 
+[![docker image version](https://img.shields.io/docker/v/amplitudeinc/evaluation-proxy?color=blue&label=docker&logo=docker&logoColor=white)](https://hub.docker.com/r/amplitudeinc/evaluation-proxy)
+
 Service to optimize local evaluation running within your infrastructure, or support evaluation on unsupported platforms and programming languages.
 
  * Preload & manage flag configurations and targeted cohorts for local evaluation SDKs running in proxy mode.
