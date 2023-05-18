@@ -1,6 +1,7 @@
 package com.amplitude.cohort
 
 import com.amplitude.util.HttpErrorResponseException
+import com.amplitude.util.get
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.retry
@@ -8,7 +9,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsChannel
@@ -50,7 +50,7 @@ interface CohortApi {
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>
 }
 
-class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
+class CohortApiV3(private val serverUrl: String, apiKey: String, secretKey: String) : CohortApi {
 
     companion object {
         val log by logger()
@@ -64,12 +64,12 @@ class CohortApiV3(apiKey: String, secretKey: String) : CohortApi {
     }
 
     override suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription> =
-        client.getCohortDescriptions(basicAuth, cohortIds)
+        client.getCohortDescriptions(serverUrl, basicAuth, cohortIds)
 
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
         val response = retry(onFailure = { e -> log.info("Get cohort members failed: $e") }) {
-            client.get("https://cohort.lab.amplitude.com/api/3/cohorts/${cohortDescription.id}") {
+            client.get(serverUrl, "/api/3/cohorts/${cohortDescription.id}") {
                 headers { set("Authorization", "Basic $basicAuth") }
                 parameter("lastComputed", cohortDescription.lastComputed)
                 parameter("refreshCohort", false)
@@ -90,7 +90,11 @@ data class GetCohortAsyncResponse(
     val requestId: String
 )
 
-class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
+class CohortApiV5(
+    private val serverUrl: String,
+    apiKey: String,
+    secretKey: String
+) : CohortApi {
 
     companion object {
         val log by logger()
@@ -104,12 +108,12 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
     }
 
     override suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription> =
-        client.getCohortDescriptions(basicAuth, cohortIds)
+        client.getCohortDescriptions(serverUrl, basicAuth, cohortIds)
 
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
         // Initiate async cohort download
-        val initialResponse = client.get("https://cohort.lab.amplitude.com/api/5/cohorts/request/${cohortDescription.id}") {
+        val initialResponse = client.get(serverUrl, "/api/5/cohorts/request/${cohortDescription.id}") {
             headers { set("Authorization", "Basic $basicAuth") }
             parameter("lastComputed", cohortDescription.lastComputed)
         }
@@ -118,7 +122,7 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
         // Poll until the cohort is ready for download
         while (true) {
             val statusResponse =
-                client.get("https://amplitude.com/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
+                client.get(serverUrl, "/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
                 }
             log.debug("getCohortMembers: status=${statusResponse.status}")
@@ -131,7 +135,7 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
         }
         // Download the cohort
         val downloadResponse =
-            client.get("https://amplitude.com/api/5/cohorts/request/${getCohortResponse.requestId}/file") {
+            client.get(serverUrl, "/api/5/cohorts/request/${getCohortResponse.requestId}/file") {
                 headers { set("Authorization", "Basic $basicAuth") }
             }
         val csv = CSVParser.parse(downloadResponse.bodyAsChannel().toInputStream(), Charsets.UTF_8, csvFormat)
@@ -140,10 +144,10 @@ class CohortApiV5(apiKey: String, secretKey: String) : CohortApi {
     }
 }
 
-private suspend fun HttpClient.getCohortDescriptions(basicAuth: String, cohortIds: Set<String>): List<CohortDescription> {
+private suspend fun HttpClient.getCohortDescriptions(serverUrl: String, basicAuth: String, cohortIds: Set<String>): List<CohortDescription> {
     CohortApiV5.log.debug("getCohortDescriptions: start")
     val response = retry(onFailure = { e -> CohortApiV5.log.info("Get cohort descriptions failed: $e") }) {
-        get("https://cohort.lab.amplitude.com/api/3/cohorts") {
+        get(serverUrl, "/api/3/cohorts") {
             headers { set("Authorization", "Basic $basicAuth") }
             parameter("cohorts", cohortIds.sorted().joinToString())
         }

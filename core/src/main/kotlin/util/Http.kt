@@ -1,7 +1,13 @@
 package com.amplitude.util
 
+import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.request
+import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.path
 import kotlinx.coroutines.delay
 
 internal class HttpErrorResponseException(
@@ -44,4 +50,28 @@ internal suspend fun retry(
         currentDelay = (currentDelay * config.factor).toLong().coerceAtMost(config.maxDelay)
     }
     throw error!!
+}
+
+suspend fun HttpClient.get(
+    url: String,
+    path: String,
+    block: HttpRequestBuilder.() -> Unit
+): HttpResponse {
+    return request(HttpMethod.Get, url, path, block)
+}
+
+suspend fun HttpClient.request(
+    method: HttpMethod,
+    url: String,
+    path: String,
+    block: HttpRequestBuilder.() -> Unit
+): HttpResponse {
+    return request {
+        this.method = method
+        url {
+            url(url)
+            path(path)
+        }
+        block.invoke(this)
+    }
 }
