@@ -33,9 +33,9 @@ class ProjectProxy(
     private val engine = EvaluationEngineImpl()
 
     private val assignmentTracker = AmplitudeAssignmentTracker(project.apiKey, configuration.assignment)
-    private val deploymentApi = DeploymentApiV1()
+    private val deploymentApi = DeploymentApiV1(configuration.serverUrl)
     private val deploymentStorage = getDeploymentStorage(project.id, configuration.redis)
-    private val cohortApi = CohortApiV5(apiKey = project.apiKey, secretKey = project.secretKey)
+    private val cohortApi = CohortApiV5(configuration.cohortServerUrl, project.apiKey, project.secretKey)
     private val cohortStorage = getCohortStorage(
         project.id,
         configuration.redis,
