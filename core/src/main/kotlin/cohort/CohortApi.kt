@@ -118,14 +118,14 @@ class CohortApiV5(
             parameter("lastComputed", cohortDescription.lastComputed)
         }
         val getCohortResponse = json.decodeFromString<GetCohortAsyncResponse>(initialResponse.body())
-        log.debug("getCohortMembers: requestId=${getCohortResponse.requestId}")
+        log.debug("getCohortMembers: cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
         // Poll until the cohort is ready for download
         while (true) {
             val statusResponse =
                 client.get(serverUrl, "/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
                 }
-            log.debug("getCohortMembers: status=${statusResponse.status}")
+            log.debug("getCohortMembers: cohortId=${cohortDescription.id}, status=${statusResponse.status}")
             if (statusResponse.status == HttpStatusCode.OK) {
                 break
             } else if (statusResponse.status != HttpStatusCode.Accepted) {
@@ -140,7 +140,7 @@ class CohortApiV5(
             }
         val csv = CSVParser.parse(downloadResponse.bodyAsChannel().toInputStream(), Charsets.UTF_8, csvFormat)
         return csv.map { it.get("user_id") }.filterNot { it.isNullOrEmpty() }.toSet()
-            .also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
+            .also { log.debug("getCohortMembers: end - cohortId=${cohortDescription.id}, resultSize=${it.size}") }
     }
 }
 
