@@ -18,7 +18,7 @@ interface DeploymentApi {
 }
 
 class DeploymentApiV1(
-    private val serverUrl: String,
+    private val serverUrl: String
 ) : DeploymentApi {
 
     companion object {
