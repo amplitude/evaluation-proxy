@@ -54,6 +54,8 @@ data class Project(
 @Serializable
 data class Configuration(
     val port: Int = Default.PORT,
+    val serverUrl: String = Default.SERVER_URL,
+    val cohortServerUrl: String = Default.COHORT_SERVER_URL,
     val flagSyncIntervalMillis: Long = Default.FLAG_SYNC_INTERVAL_MILLIS,
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
@@ -155,6 +157,8 @@ object EnvKey {
 
 object Default {
     const val PORT = 3546
+    const val SERVER_URL = "https://api.lab.amplitude.com"
+    const val COHORT_SERVER_URL = "https://cohort.lab.amplitude.com"
     const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val MAX_COHORT_SIZE = Int.MAX_VALUE
