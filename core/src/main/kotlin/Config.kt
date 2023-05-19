@@ -65,6 +65,8 @@ data class Configuration(
     companion object {
         fun fromEnv() = Configuration(
             port = intEnv(EnvKey.PORT, Default.PORT)!!,
+            serverUrl = stringEnv(EnvKey.SERVER_URL, Default.SERVER_URL)!!,
+            cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.COHORT_SERVER_URL)!!,
             flagSyncIntervalMillis = longEnv(
                 EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
                 Default.FLAG_SYNC_INTERVAL_MILLIS
@@ -135,6 +137,8 @@ data class RedisConfiguration(
 
 object EnvKey {
     const val PORT = "AMPLITUDE_PORT"
+    const val SERVER_URL = "AMPLITUDE_SERVER_URL"
+    const val COHORT_SERVER_URL = "AMPLITUDE_COHORT_SERVER_URL"
 
     const val PROJECT_ID = "AMPLITUDE_PROJECT_ID"
     const val API_KEY = "AMPLITUDE_API_KEY"
