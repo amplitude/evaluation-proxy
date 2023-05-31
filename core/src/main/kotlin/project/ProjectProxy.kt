@@ -51,8 +51,15 @@ class ProjectProxy(
 
     suspend fun start() {
         log.info("Starting project. projectId=${project.id} deploymentKeys=${project.deploymentKeys}")
+        // Add deployments to storage
         for (deploymentKey in project.deploymentKeys) {
             deploymentStorage.putDeployment(deploymentKey)
+        }
+        // Remove deployments which are no longer being managed
+        val storageDeploymentKeys = deploymentStorage.getDeployments()
+        for (storageDeploymentKey in storageDeploymentKeys - project.deploymentKeys) {
+            deploymentStorage.removeDeployment(storageDeploymentKey)
+            deploymentStorage.removeFlagConfigs(storageDeploymentKey)
         }
         projectRunner.start()
     }

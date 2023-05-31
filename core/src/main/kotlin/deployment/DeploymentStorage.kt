@@ -101,7 +101,7 @@ class RedisDeploymentStorage(
     )
 
     private val mutex = Mutex()
-    private var flagConfigCache: List<FlagConfig>? = null
+    private val flagConfigCache: MutableList<FlagConfig> = mutableListOf()
 
     override suspend fun getDeployments(): Set<String> {
         return redis.smembers(RedisKey.Deployments(projectId)) ?: emptySet()
@@ -127,7 +127,8 @@ class RedisDeploymentStorage(
         // Optimization so repeat puts don't update the data to the same value in redis.
         val changed = mutex.withLock {
             if (flagConfigs != flagConfigCache) {
-                flagConfigCache = flagConfigs
+                flagConfigCache.clear()
+                flagConfigCache += flagConfigs
                 true
             } else {
                 false
@@ -141,5 +142,8 @@ class RedisDeploymentStorage(
 
     override suspend fun removeFlagConfigs(deploymentKey: String) {
         redis.del(RedisKey.FlagConfigs(projectId, deploymentKey))
+        mutex.withLock {
+            flagConfigCache.clear()
+        }
     }
 }

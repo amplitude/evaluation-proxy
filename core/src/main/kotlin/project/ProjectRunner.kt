@@ -51,8 +51,7 @@ class ProjectRunner(
         scope.launch {
             while (true) {
                 delay(configuration.flagSyncIntervalMillis)
-                val deployments = deploymentStorage.getDeployments()
-                refresh(deployments)
+                refresh(deploymentStorage.getDeployments())
             }
         }
     }
@@ -70,22 +69,24 @@ class ProjectRunner(
         log.debug("refresh: start - deploymentKeys=$deploymentKeys")
         lock.withLock {
             val jobs = mutableListOf<Job>()
-            val currentDeployments = deploymentRunners.keys
-            val addedDeployments = deploymentKeys - currentDeployments
-            val removedDeployments = currentDeployments - deploymentKeys
+            val runningDeployments = deploymentRunners.keys.toSet()
+            val addedDeployments = deploymentKeys - runningDeployments
+            val removedDeployments = runningDeployments - deploymentKeys
             addedDeployments.forEach { deployment ->
-                jobs += scope.launch { addDeployment(deployment) }
+                jobs += scope.launch { addDeploymentInternal(deployment) }
             }
             removedDeployments.forEach { deployment ->
-                jobs += scope.launch { removeDeployment(deployment) }
+                jobs += scope.launch { removeDeploymentInternal(deployment) }
             }
             jobs.joinAll()
+            // Keep cohorts which are targeted by all stored deployments.
             removeUnusedCohorts(deploymentKeys)
         }
         log.debug("refresh: end - deploymentKeys=$deploymentKeys")
     }
 
-    private suspend fun addDeployment(deploymentKey: String) {
+    // Must be run within lock
+    private suspend fun addDeploymentInternal(deploymentKey: String) {
         log.info("Adding deployment $deploymentKey")
         val deploymentRunner = DeploymentRunner(
             configuration,
@@ -98,10 +99,12 @@ class ProjectRunner(
         deploymentRunners[deploymentKey] = deploymentRunner
     }
 
-    private suspend fun removeDeployment(deploymentKey: String) {
+    // Must be run within lock
+    private suspend fun removeDeploymentInternal(deploymentKey: String) {
         log.info("Removing deployment $deploymentKey")
         deploymentRunners.remove(deploymentKey)?.stop()
         deploymentStorage.removeFlagConfigs(deploymentKey)
+        deploymentStorage.removeDeployment(deploymentKey)
     }
 
     private suspend fun removeUnusedCohorts(deploymentKeys: Set<String>) {
