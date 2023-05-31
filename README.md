@@ -32,7 +32,6 @@ configuration:
 
 The developer docs contain [additional information about configuration](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy#configuration).
 
-
 ## Deployment
 
 The evaluation proxy is stateless, and should be deployed with multiple instances behind a load balancer for high availability and scalability.
@@ -44,12 +43,9 @@ Use the evaluation proxy [Helm chart](https://github.com/amplitude/evaluation-pr
 
 ### Docker Compose Example
 
-Service is generally deployed via a [docker image](https://hub.docker.com/r/amplitudeinc/evaluation-proxy).
-
 Run the container locally with redis persistence using `docker compose`. You must first update the `compose-config.yaml` file with your project and deployment keys before running the composition.
 
 ```
+docker compose build
 docker compose up
 ```
-
-

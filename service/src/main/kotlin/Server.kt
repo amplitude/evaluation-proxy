@@ -35,11 +35,21 @@ fun main() {
     /*
      * Load the evaluation proxy's configuration.
      *
-     * The PROXY_CONFIG_FILE_PATH environment variable determines whether to load config from a file or environment
-     * variables.
+     * The PROXY_CONFIG_FILE_PATH environment variable determines where to load the proxy configuration from. The
+     * PROXY_PROJECTS_FILE_PATH environment variable determines where to load the project info from. This defaults
+     * to the config file path if not set, which defaults to `/etc/evaluation-proxy-config.yaml`.
      */
     log.info("Accessing proxy configuration.")
     val proxyConfigFilePath = stringEnv("PROXY_CONFIG_FILE_PATH", "/etc/evaluation-proxy-config.yaml")!!
+    val proxyProjectsFilePath = stringEnv("PROXY_PROJECTS_FILE_PATH", proxyConfigFilePath)!!
+    val projectsFile = try {
+        ProjectsFile.fromFile(proxyProjectsFilePath).also {
+            log.info("Found projects file at $proxyProjectsFilePath")
+        }
+    } catch (file: FileNotFoundException) {
+        log.info("Proxy projects file not found at $proxyProjectsFilePath, reading project from env.")
+        ProjectsFile.fromEnv()
+    }
     val configFile = try {
         ConfigurationFile.fromFile(proxyConfigFilePath).also {
             log.info("Found configuration file at $proxyConfigFilePath")
@@ -57,7 +67,7 @@ fun main() {
          * Initialize and start the evaluation proxy.
          */
         val evaluationProxy = EvaluationProxy(
-            configFile.projects,
+            projectsFile.projects,
             configFile.configuration
         )
         runBlocking {

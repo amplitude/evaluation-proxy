@@ -1,6 +1,5 @@
 package com.amplitude.plugins
 
-import com.amplitude.util.booleanEnv
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -25,22 +24,17 @@ fun Application.configureLogging() {
 }
 
 /**
- * Enable or disable prometheus metrics from the /metrics endpoint.
- *
- *  - Env: EVALUATION_METRICS
- *  - Value: true, false
+ * Enable prometheus metrics from the /metrics endpoint.
  */
 fun Application.configureMetrics() {
-    if (booleanEnv("AMPLITUDE_METRICS")) {
-        val metricsRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
-        install(MicrometerMetrics) {
-            metricName = "evaluation.http.server.requests"
-            registry = metricsRegistry
-        }
-        routing {
-            get("/metrics") {
-                call.respond(metricsRegistry.scrape())
-            }
+    val metricsRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+    install(MicrometerMetrics) {
+        metricName = "evaluation.http.server.requests"
+        registry = metricsRegistry
+    }
+    routing {
+        get("/metrics") {
+            call.respond(metricsRegistry.scrape())
         }
     }
 }

@@ -2,6 +2,7 @@ package com.amplitude
 
 import com.amplitude.util.booleanEnv
 import com.amplitude.util.intEnv
+import com.amplitude.util.json
 import com.amplitude.util.longEnv
 import com.amplitude.util.stringEnv
 import com.charleskorn.kaml.Yaml
@@ -10,24 +11,47 @@ import kotlinx.serialization.decodeFromString
 import java.io.File
 
 @Serializable
+data class ProjectsFile(
+    val projects: List<Project>
+) {
+    companion object {
+        fun fromEnv(): ProjectsFile {
+            val project = Project.fromEnv()
+            return ProjectsFile(listOf(project))
+        }
+
+        fun fromFile(path: String): ProjectsFile {
+            val data = File(path).readText()
+            return if (path.endsWith(".yaml") || path.endsWith(".yml")) {
+                Yaml.default.decodeFromString(data)
+            } else if (path.endsWith(".json")) {
+                json.decodeFromString(data)
+            } else {
+                throw IllegalArgumentException("Proxy configuration file format must be \".yaml\" or \".yml\". Found $path")
+            }
+        }
+    }
+}
+
+@Serializable
 data class ConfigurationFile(
-    val projects: List<Project>,
     val configuration: Configuration = Configuration()
 ) {
     companion object {
 
         fun fromEnv(): ConfigurationFile {
-            val project = Project.fromEnv()
             val configuration = Configuration.fromEnv()
-            return ConfigurationFile(listOf(project), configuration)
+            return ConfigurationFile(configuration)
         }
 
         fun fromFile(path: String): ConfigurationFile {
             val data = File(path).readText()
             return if (path.endsWith(".yaml") || path.endsWith(".yml")) {
                 Yaml.default.decodeFromString(data)
+            } else if (path.endsWith(".json")) {
+                json.decodeFromString(data)
             } else {
-                throw IllegalArgumentException("Proxy configuration file format must be \".yaml\" or \".yml\". Found $path")
+                throw IllegalArgumentException("Proxy configuration file format must be \".yaml\", \".yml\", or \".json\". Found $path")
             }
         }
     }
