@@ -12,7 +12,7 @@ import java.io.File
 
 @Serializable
 data class ProjectsFile(
-    val projects: List<Project>,
+    val projects: List<Project>
 ) {
     companion object {
         fun fromEnv(): ProjectsFile {
