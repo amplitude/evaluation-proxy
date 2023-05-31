@@ -1,5 +1,6 @@
 package com.amplitude
 
+import com.amplitude.deployment.getDeploymentStorage
 import com.amplitude.experiment.evaluation.FlagConfig
 import com.amplitude.experiment.evaluation.SkylabUser
 import com.amplitude.experiment.evaluation.Variant
@@ -43,7 +44,20 @@ class EvaluationProxy(
         for (project in projects) {
             projectStorage.putProject(project.id)
         }
-        // TODO clean up projects that have been removed.
+        // Remove all non-configured projects and associated data
+        val storageProjectIds = projectStorage.getProjects()
+        val projectIds = projects.map { it.id }.toSet()
+        for (projectId in storageProjectIds - projectIds) {
+            log.info("Removing project $projectId")
+            val storage = getDeploymentStorage(projectId, configuration.redis)
+            val deployments = storage.getDeployments()
+            for (deployment in deployments) {
+                log.info("Removing deployment $deployment for project $projectId")
+                storage.removeDeployment(deployment)
+                storage.removeFlagConfigs(deployment)
+            }
+            projectStorage.removeProject(projectId)
+        }
         projectProxies.map { launch { it.value.start() } }.joinAll()
         log.info("Evaluation proxy started.")
     }
