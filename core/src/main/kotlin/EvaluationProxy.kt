@@ -15,7 +15,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 
-const val VERSION = "0.3.1"
+const val VERSION = "0.3.2"
 
 class HttpErrorResponseException(
     val status: Int,
