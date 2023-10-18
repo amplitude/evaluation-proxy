@@ -7,7 +7,7 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.deployment.DeploymentApi
 import com.amplitude.deployment.DeploymentRunner
 import com.amplitude.deployment.DeploymentStorage
-import com.amplitude.experiment.evaluation.FlagConfig
+import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
@@ -108,7 +108,7 @@ class ProjectRunner(
     }
 
     private suspend fun removeUnusedCohorts(deploymentKeys: Set<String>) {
-        val allFlagConfigs = mutableListOf<FlagConfig>()
+        val allFlagConfigs = mutableListOf<EvaluationFlag>()
         for (deploymentKey in deploymentKeys) {
             allFlagConfigs += deploymentStorage.getFlagConfigs(deploymentKey) ?: continue
         }

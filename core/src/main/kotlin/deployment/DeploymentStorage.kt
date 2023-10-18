@@ -1,8 +1,7 @@
 package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
-import com.amplitude.experiment.evaluation.FlagConfig
-import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
+import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
@@ -11,7 +10,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
 interface DeploymentStorage {
@@ -19,8 +17,8 @@ interface DeploymentStorage {
     suspend fun getDeployments(): Set<String>
     suspend fun putDeployment(deploymentKey: String)
     suspend fun removeDeployment(deploymentKey: String)
-    suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>?
-    suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>)
+    suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>?
+    suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>)
     suspend fun removeFlagConfigs(deploymentKey: String)
 }
 
@@ -43,7 +41,7 @@ class InMemoryDeploymentStorage : DeploymentStorage {
     )
 
     private val lock = Mutex()
-    private val deploymentStorage = mutableMapOf<String, List<FlagConfig>?>()
+    private val deploymentStorage = mutableMapOf<String, List<EvaluationFlag>?>()
 
     override suspend fun getDeployments(): Set<String> {
         return lock.withLock {
@@ -65,13 +63,13 @@ class InMemoryDeploymentStorage : DeploymentStorage {
         }
     }
 
-    override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>? {
+    override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>? {
         return lock.withLock {
             deploymentStorage[deploymentKey]
         }
     }
 
-    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>) {
+    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>) {
         lock.withLock {
             deploymentStorage[deploymentKey] = flagConfigs
         }
@@ -101,7 +99,7 @@ class RedisDeploymentStorage(
     )
 
     private val mutex = Mutex()
-    private val flagConfigCache: MutableList<FlagConfig> = mutableListOf()
+    private val flagConfigCache: MutableList<EvaluationFlag> = mutableListOf()
 
     override suspend fun getDeployments(): Set<String> {
         return redis.smembers(RedisKey.Deployments(projectId)) ?: emptySet()
@@ -117,13 +115,14 @@ class RedisDeploymentStorage(
         deployments.emit(getDeployments())
     }
 
-    override suspend fun getFlagConfigs(deploymentKey: String): List<FlagConfig>? {
+    // TODO Add in memory caching w/ invalidation
+    override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>? {
         // High volume, use read only redis
         val jsonEncodedFlags = readOnlyRedis.get(RedisKey.FlagConfigs(projectId, deploymentKey)) ?: return null
-        return json.decodeFromString<List<SerialFlagConfig>>(jsonEncodedFlags).map { it.convert() }
+        return json.decodeFromString(jsonEncodedFlags)
     }
 
-    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<FlagConfig>) {
+    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>) {
         // Optimization so repeat puts don't update the data to the same value in redis.
         val changed = mutex.withLock {
             if (flagConfigs != flagConfigCache) {
@@ -135,7 +134,7 @@ class RedisDeploymentStorage(
             }
         }
         if (changed) {
-            val jsonEncodedFlags = json.encodeToString(flagConfigs.map { SerialFlagConfig(it) })
+            val jsonEncodedFlags = json.encodeToString(flagConfigs)
             redis.set(RedisKey.FlagConfigs(projectId, deploymentKey), jsonEncodedFlags)
         }
     }

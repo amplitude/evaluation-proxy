@@ -185,7 +185,7 @@ object EnvKey {
 
 object Default {
     const val PORT = 3546
-    const val SERVER_URL = "https://api.lab.amplitude.com"
+    const val SERVER_URL = "https://flag.lab.amplitude.com"
     const val COHORT_SERVER_URL = "https://cohort.lab.amplitude.com"
     const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L

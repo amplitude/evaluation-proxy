@@ -15,7 +15,7 @@ private const val STORAGE_PROTOCOL_VERSION = "v1"
 
 internal sealed class RedisKey(val value: String) {
 
-    object Projects : RedisKey("projects")
+    data object Projects : RedisKey("projects")
 
     data class Deployments(
         val projectId: String

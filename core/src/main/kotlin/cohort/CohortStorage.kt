@@ -6,7 +6,6 @@ import com.amplitude.util.RedisKey
 import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlin.time.Duration
 

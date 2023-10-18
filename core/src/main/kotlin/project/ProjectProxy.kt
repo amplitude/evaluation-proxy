@@ -10,12 +10,12 @@ import com.amplitude.cohort.getCohortStorage
 import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.getDeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
-import com.amplitude.experiment.evaluation.FlagConfig
-import com.amplitude.experiment.evaluation.FlagResult
-import com.amplitude.experiment.evaluation.SkylabUser
-import com.amplitude.experiment.evaluation.Variant
+import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.experiment.evaluation.EvaluationVariant
+import com.amplitude.experiment.evaluation.topologicalSort
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
+import com.amplitude.util.toEvaluationContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.DurationUnit
@@ -69,8 +69,8 @@ class ProjectProxy(
         projectRunner.stop()
     }
 
-    suspend fun getFlagConfigs(deploymentKey: String?): List<FlagConfig> {
-        if (deploymentKey.isNullOrEmpty() || !deploymentKey.startsWith("server-")) {
+    suspend fun getFlagConfigs(deploymentKey: String?): List<EvaluationFlag> {
+        if (deploymentKey.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
         return deploymentStorage.getFlagConfigs(deploymentKey)
@@ -78,7 +78,7 @@ class ProjectProxy(
     }
 
     suspend fun getCohortMembershipsForUser(deploymentKey: String?, userId: String?): Set<String> {
-        if (deploymentKey.isNullOrEmpty() || !deploymentKey.startsWith("server-")) {
+        if (deploymentKey.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
         if (userId.isNullOrEmpty()) {
@@ -91,45 +91,51 @@ class ProjectProxy(
 
     suspend fun evaluate(
         deploymentKey: String?,
-        user: SkylabUser?,
+        user: Map<String, Any?>?,
         flagKeys: Set<String>? = null
-    ): Map<String, Variant> {
-        if (deploymentKey.isNullOrEmpty() || !deploymentKey.startsWith("server-")) {
+    ): Map<String, EvaluationVariant> {
+        if (deploymentKey.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
-        // Get flag configs for the deployment from storage.
-        val flagConfigs = deploymentStorage.getFlagConfigs(deploymentKey)
-        if (flagConfigs == null || flagConfigs.isEmpty()) {
+        // Get flag configs for the deployment from storage and topo sort.
+        val storageFlags = deploymentStorage.getFlagConfigs(deploymentKey)
+        if (storageFlags.isNullOrEmpty()) {
             return mapOf()
         }
-        // Enrich user with cohort IDs.
-        val enrichedUser = user?.userId?.let { userId ->
-            user.copy(cohortIds = cohortStorage.getCohortMembershipsForUser(userId))
+        val flags = topologicalSort(storageFlags, flagKeys ?: setOf())
+        if (flags.isEmpty()) {
+            return mapOf()
         }
+        // Enrich user with cohort IDs and build the evaluation context
+        val userId = user?.get("user_id") as? String
+        val enrichedUser = if (userId != null) {
+            user.toMutableMap().apply {
+                put("cohort_ids", cohortStorage.getCohortMembershipsForUser(userId))
+            }
+        } else null
+        val evaluationContext = enrichedUser.toEvaluationContext()
         // Evaluate results
-        log.debug("evaluate - user=$enrichedUser")
-        val result = engine.evaluate(flagConfigs, enrichedUser)
+        log.debug("evaluate - context={}", evaluationContext)
+        val result = engine.evaluate(evaluationContext, flags)
         if (enrichedUser != null) {
             coroutineScope {
                 launch {
-                    assignmentTracker.track(Assignment(enrichedUser, result))
+                    assignmentTracker.track(Assignment(evaluationContext, result))
                 }
             }
         }
-        return result.filterDeployedVariants(flagKeys)
+        return result
     }
 
-    /**
-     * Filter only non-default, deployed variants from the results that are included if flag keys (if not empty).
-     */
-    private fun Map<String, FlagResult>.filterDeployedVariants(flagKeys: Set<String>?): Map<String, Variant> {
-        return filter { entry ->
-            val isVariant = !entry.value.isDefaultVariant
-            val isIncluded = (flagKeys.isNullOrEmpty() || flagKeys.contains(entry.key))
-            val isDeployed = entry.value.deployed
-            isVariant && isIncluded && isDeployed
-        }.mapValues { entry ->
-            entry.value.variant
-        }.toMap()
+    suspend fun evaluateV1(
+        deploymentKey: String?,
+        user: Map<String, Any?>?,
+        flagKeys: Set<String>? = null
+    ): Map<String, EvaluationVariant> {
+        return evaluate(deploymentKey, user, flagKeys).filter { entry ->
+            val default = entry.value.metadata?.get("default") as? Boolean ?: false
+            val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
+            (!default && deployed)
+        }
     }
 }

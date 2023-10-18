@@ -1,5 +1,3 @@
-package com.amplituide.util
-
 import com.amplitude.util.Cache
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll

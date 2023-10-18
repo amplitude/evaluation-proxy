@@ -1,11 +1,8 @@
 package com.amplitude
 
 import com.amplitude.deployment.getDeploymentStorage
-import com.amplitude.experiment.evaluation.FlagConfig
-import com.amplitude.experiment.evaluation.SkylabUser
-import com.amplitude.experiment.evaluation.Variant
-import com.amplitude.experiment.evaluation.serialization.SerialFlagConfig
-import com.amplitude.experiment.evaluation.serialization.SerialVariant
+import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.project.ProjectProxy
 import com.amplitude.project.getProjectStorage
 import com.amplitude.util.json
@@ -68,7 +65,7 @@ class EvaluationProxy(
         log.info("Evaluation proxy shut down.")
     }
 
-    suspend fun getFlagConfigs(deploymentKey: String?): List<FlagConfig> {
+    suspend fun getFlagConfigs(deploymentKey: String?): List<EvaluationFlag> {
         val project = deploymentProxies[deploymentKey] ?: throw HttpErrorResponseException(404, "Deployment not found.")
         val projectProxy = projectProxies[project] ?: throw HttpErrorResponseException(404, "Project not found.")
         return projectProxy.getFlagConfigs(deploymentKey)
@@ -82,28 +79,41 @@ class EvaluationProxy(
 
     suspend fun evaluate(
         deploymentKey: String?,
-        user: SkylabUser?,
+        user: Map<String, Any?>?,
         flagKeys: Set<String>? = null
-    ): Map<String, Variant> {
+    ): Map<String, EvaluationVariant> {
         val project = deploymentProxies[deploymentKey] ?: throw HttpErrorResponseException(404, "Deployment not found.")
         val projectProxy = projectProxies[project] ?: throw HttpErrorResponseException(404, "Project not found.")
         return projectProxy.evaluate(deploymentKey, user, flagKeys)
     }
+
+    suspend fun evaluateV1(
+        deploymentKey: String?,
+        user: Map<String, Any?>?,
+        flagKeys: Set<String>? = null
+    ): Map<String, EvaluationVariant> {
+        val project = deploymentProxies[deploymentKey] ?: throw HttpErrorResponseException(404, "Deployment not found.")
+        val projectProxy = projectProxies[project] ?: throw HttpErrorResponseException(404, "Project not found.")
+        return projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+    }
 }
 
+// Serialized Proxy Calls
+
 suspend fun EvaluationProxy.getSerializedFlagConfigs(deploymentKey: String?): String =
-    getFlagConfigs(deploymentKey).encodeToJsonString()
+    json.encodeToString(getFlagConfigs(deploymentKey))
 
 suspend fun EvaluationProxy.getSerializedCohortMembershipsForUser(deploymentKey: String?, userId: String?): String =
-    getCohortMembershipsForUser(deploymentKey, userId).encodeToJsonString()
+    json.encodeToString(getCohortMembershipsForUser(deploymentKey, userId))
 
 suspend fun EvaluationProxy.serializedEvaluate(
     deploymentKey: String?,
-    user: SkylabUser?,
+    user: Map<String, Any?>?,
     flagKeys: Set<String>? = null
-) = evaluate(deploymentKey, user, flagKeys).encodeToJsonString()
+): String = json.encodeToString(evaluate(deploymentKey, user, flagKeys))
 
-private fun List<FlagConfig>.encodeToJsonString(): String = json.encodeToString(map { SerialFlagConfig(it) })
-private fun Set<String>.encodeToJsonString(): String = json.encodeToString(this)
-private fun Map<String, Variant>.encodeToJsonString(): String =
-    json.encodeToString(mapValues { SerialVariant(it.value) })
+suspend fun EvaluationProxy.serializedEvaluateV1(
+    deploymentKey: String?,
+    user: Map<String, Any?>?,
+    flagKeys: Set<String>? = null
+): String = json.encodeToString(evaluateV1(deploymentKey, user, flagKeys))
