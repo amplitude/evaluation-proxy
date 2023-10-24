@@ -19,38 +19,23 @@ class CohortLoader(
     private val jobsMutex = Mutex()
     private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun loadCohorts(cohortIds: Set<String>, state: Set<String> = cohortIds) = coroutineScope {
-        log.debug("loadCohorts: start - cohortIds=$cohortIds")
-
-        // Get cohort descriptions from storage and network.
-        val networkCohortDescriptions = cohortApi.getCohortDescriptions(state)
-
-        // Filter cohorts received from network. Removes cohorts which are:
-        //   1. Not requested for management by this function.
-        //   2. Larger than the max size.
-        //   3. Are equal to what has been downloaded already.
-        val cohorts = networkCohortDescriptions.filter { networkCohortDescription ->
-            val storageDescription = cohortStorage.getCohortDescription(networkCohortDescription.id)
-            cohortIds.contains(networkCohortDescription.id) &&
-                networkCohortDescription.size <= maxCohortSize &&
-                networkCohortDescription.lastComputed > (storageDescription?.lastComputed ?: -1)
-        }
-        log.debug("loadCohorts: filtered network descriptions - $cohorts")
-
-        // Download and store each cohort if a download job has not already been started.
-        for (cohort in cohorts) {
-            val job = jobsMutex.withLock {
-                jobs.getOrPut(cohort.id) {
+    suspend fun loadCohort(cohortId: String) = coroutineScope {
+        log.debug("loadCohort: start - cohortId={}", cohortId)
+        val networkCohort = cohortApi.getCohortDescription(cohortId)
+        val storageCohort = cohortStorage.getCohortDescription(cohortId)
+        val shouldDownloadCohort = networkCohort.size <= maxCohortSize &&
+            networkCohort.lastComputed > (storageCohort?.lastComputed ?: -1)
+        if (shouldDownloadCohort) {
+            jobsMutex.withLock {
+                jobs.getOrPut(cohortId) {
                     launch {
-                        log.info("Downloading cohort. $cohort")
-                        val cohortMembers = cohortApi.getCohortMembers(cohort)
-                        cohortStorage.putCohort(cohort, cohortMembers)
-                        jobsMutex.withLock { jobs.remove(cohort.id) }
+                        log.info("Downloading cohort. $networkCohort")
+                        val cohortMembers = cohortApi.getCohortMembers(networkCohort)
+                        cohortStorage.putCohort(networkCohort, cohortMembers)
+                        jobsMutex.withLock { jobs.remove(cohortId) }
                     }
                 }
-            }
-            job.join()
+            }.join()
         }
-        log.debug("loadCohorts: end - cohortIds=$cohortIds")
     }
 }

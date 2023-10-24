@@ -27,16 +27,20 @@ class DeploymentLoader(
         jobsMutex.withLock {
             jobs.getOrPut(deploymentKey) {
                 launch {
-                    val networkFlagConfigs = deploymentApi.getFlagConfigs(deploymentKey)
-                    val storageFlagConfigs = deploymentStorage.getFlagConfigs(deploymentKey) ?: listOf()
-                    val networkCohortIds = networkFlagConfigs.getCohortIds()
-                    val storageCohortIds = storageFlagConfigs.getCohortIds()
-                    val addedCohortIds = networkCohortIds - storageCohortIds
-                    if (addedCohortIds.isNotEmpty()) {
-                        cohortLoader.loadCohorts(addedCohortIds, networkCohortIds)
+                    val networkFlags = deploymentApi.getFlagConfigs(deploymentKey)
+                    for (flag in networkFlags) {
+                        val cohortIds = flag.getCohortIds()
+                        if (cohortIds.isNotEmpty()) {
+                            launch {
+                                for (cohortId in cohortIds) {
+                                    cohortLoader.loadCohort(cohortId)
+                                }
+                                deploymentStorage.putFlag(deploymentKey, flag)
+                            }
+                        } else {
+                            deploymentStorage.putFlag(deploymentKey, flag)
+                        }
                     }
-                    deploymentStorage.putFlagConfigs(deploymentKey, networkFlagConfigs)
-                    jobs.remove(deploymentKey)
                 }
             }
         }.join()

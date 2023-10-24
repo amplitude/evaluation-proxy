@@ -40,9 +40,9 @@ class DeploymentRunner(
         scope.launch {
             while (true) {
                 delay(configuration.cohortSyncIntervalMillis)
-                val cohortIds = deploymentStorage.getFlagConfigs(deploymentKey)?.getCohortIds()
-                if (!cohortIds.isNullOrEmpty()) {
-                    cohortLoader.loadCohorts(cohortIds)
+                val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getCohortIds()
+                for (cohortId in cohortIds) {
+                    cohortLoader.loadCohort(cohortId)
                 }
             }
         }

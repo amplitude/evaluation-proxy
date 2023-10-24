@@ -20,8 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class ProjectRunner(
+internal class ProjectRunner(
     private val configuration: Configuration,
+    private val projectApi: ProjectApi,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
@@ -40,18 +41,17 @@ class ProjectRunner(
     private val cohortLoader = CohortLoader(configuration.maxCohortSize, cohortApi, cohortStorage)
 
     suspend fun start() {
-        refresh(deploymentStorage.getDeployments())
-        // Collect deployment updates from the storage
-        scope.launch {
-            deploymentStorage.deployments.collect { deployments ->
-                refresh(deployments)
-            }
-        }
-        // Periodic deployment refresher
+        refresh()
+        // Periodic deployment update and refresher
         scope.launch {
             while (true) {
-                delay(configuration.flagSyncIntervalMillis)
-                refresh(deploymentStorage.getDeployments())
+                delay(configuration.deploymentSyncIntervalMillis)
+                // Get deployments from API, update storage, and refresh
+                val deployments = projectApi.getDeployments()
+                for (deployment in deployments) {
+                    deploymentStorage.putDeployment(deployment.key)
+                }
+                refresh()
             }
         }
     }
@@ -65,8 +65,9 @@ class ProjectRunner(
         supervisor.cancelAndJoin()
     }
 
-    private suspend fun refresh(deploymentKeys: Set<String>) {
-        log.debug("refresh: start - deploymentKeys=$deploymentKeys")
+    private suspend fun refresh() {
+        log.debug("refresh: start")
+        val deploymentKeys = deploymentStorage.getDeployments()
         lock.withLock {
             val jobs = mutableListOf<Job>()
             val runningDeployments = deploymentRunners.keys.toSet()
@@ -82,7 +83,7 @@ class ProjectRunner(
             // Keep cohorts which are targeted by all stored deployments.
             removeUnusedCohorts(deploymentKeys)
         }
-        log.debug("refresh: end - deploymentKeys=$deploymentKeys")
+        log.debug("refresh: end")
     }
 
     // Must be run within lock
@@ -103,14 +104,14 @@ class ProjectRunner(
     private suspend fun removeDeploymentInternal(deploymentKey: String) {
         log.info("Removing deployment $deploymentKey")
         deploymentRunners.remove(deploymentKey)?.stop()
-        deploymentStorage.removeFlagConfigs(deploymentKey)
+        deploymentStorage.removeAllFlags(deploymentKey)
         deploymentStorage.removeDeployment(deploymentKey)
     }
 
     private suspend fun removeUnusedCohorts(deploymentKeys: Set<String>) {
         val allFlagConfigs = mutableListOf<EvaluationFlag>()
         for (deploymentKey in deploymentKeys) {
-            allFlagConfigs += deploymentStorage.getFlagConfigs(deploymentKey) ?: continue
+            allFlagConfigs += deploymentStorage.getAllFlags(deploymentKey).values
         }
         val allTargetedCohortIds = allFlagConfigs.getCohortIds()
         val allStoredCohortDescriptions = cohortStorage.getCohortDescriptions().values

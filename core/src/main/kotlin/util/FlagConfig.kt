@@ -13,7 +13,7 @@ fun Collection<EvaluationFlag>.getCohortIds(): Set<String> {
     return cohortIds
 }
 
-private fun EvaluationFlag.getCohortIds(): Set<String> {
+fun EvaluationFlag.getCohortIds(): Set<String> {
     val cohortIds = mutableSetOf<String>()
     for (segment in this.segments) {
         cohortIds += segment.getCohortConditionIds()

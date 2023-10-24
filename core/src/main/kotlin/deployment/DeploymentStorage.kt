@@ -5,21 +5,21 @@ import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
 interface DeploymentStorage {
-    val deployments: Flow<Set<String>>
     suspend fun getDeployments(): Set<String>
     suspend fun putDeployment(deploymentKey: String)
     suspend fun removeDeployment(deploymentKey: String)
-    suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>?
-    suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>)
-    suspend fun removeFlagConfigs(deploymentKey: String)
+    suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag?
+    suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag>
+    suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag)
+    suspend fun putAllFlags(deploymentKey: String, flags: List<EvaluationFlag>)
+    suspend fun removeFlag(deploymentKey: String, flagKey: String)
+    suspend fun removeAllFlags(deploymentKey: String)
 }
 
 fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
@@ -35,13 +35,8 @@ fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfigurati
 
 class InMemoryDeploymentStorage : DeploymentStorage {
 
-    override val deployments = MutableSharedFlow<Set<String>>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-
     private val lock = Mutex()
-    private val deploymentStorage = mutableMapOf<String, List<EvaluationFlag>?>()
+    private val deploymentStorage = mutableMapOf<String, MutableMap<String, EvaluationFlag>?>()
 
     override suspend fun getDeployments(): Set<String> {
         return lock.withLock {
@@ -51,33 +46,49 @@ class InMemoryDeploymentStorage : DeploymentStorage {
 
     override suspend fun putDeployment(deploymentKey: String) {
         return lock.withLock {
-            deploymentStorage[deploymentKey] = null
-            deployments.emit(deploymentStorage.keys)
+            deploymentStorage.putIfAbsent(deploymentKey, null)
         }
     }
 
     override suspend fun removeDeployment(deploymentKey: String) {
         return lock.withLock {
             deploymentStorage.remove(deploymentKey)
-            deployments.emit(deploymentStorage.keys)
         }
     }
 
-    override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>? {
+    override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {
         return lock.withLock {
-            deploymentStorage[deploymentKey]
+            deploymentStorage[deploymentKey]?.get(flagKey)
         }
     }
 
-    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>) {
-        lock.withLock {
-            deploymentStorage[deploymentKey] = flagConfigs
+    override suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag> {
+        return lock.withLock {
+            deploymentStorage[deploymentKey]?.toMap() ?: mapOf()
         }
     }
 
-    override suspend fun removeFlagConfigs(deploymentKey: String) {
-        lock.withLock {
-            deploymentStorage.remove(deploymentKey)
+    override suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag) {
+        return lock.withLock {
+            deploymentStorage[deploymentKey]?.put(flag.key, flag)
+        }
+    }
+
+    override suspend fun putAllFlags(deploymentKey: String, flags: List<EvaluationFlag>) {
+        return lock.withLock {
+            deploymentStorage[deploymentKey]?.putAll(flags.associateBy { it.key })
+        }
+    }
+
+    override suspend fun removeFlag(deploymentKey: String, flagKey: String) {
+        return lock.withLock {
+            deploymentStorage[deploymentKey]?.remove(flagKey)
+        }
+    }
+
+    override suspend fun removeAllFlags(deploymentKey: String) {
+        return lock.withLock {
+            deploymentStorage[deploymentKey] = null
         }
     }
 }
@@ -92,57 +103,50 @@ class RedisDeploymentStorage(
     private val redis = RedisConnection(uri, prefix)
     private val readOnlyRedis = RedisConnection(readOnlyUri, prefix)
 
-    // TODO Could be optimized w/ pub sub
-    override val deployments = MutableSharedFlow<Set<String>>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-
-    private val mutex = Mutex()
-    private val flagConfigCache: MutableList<EvaluationFlag> = mutableListOf()
-
     override suspend fun getDeployments(): Set<String> {
         return redis.smembers(RedisKey.Deployments(projectId)) ?: emptySet()
     }
 
     override suspend fun putDeployment(deploymentKey: String) {
         redis.sadd(RedisKey.Deployments(projectId), setOf(deploymentKey))
-        deployments.emit(getDeployments())
     }
 
     override suspend fun removeDeployment(deploymentKey: String) {
         redis.srem(RedisKey.Deployments(projectId), deploymentKey)
-        deployments.emit(getDeployments())
+    }
+
+    override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {
+        val flagJson = redis.hget(RedisKey.FlagConfigs(projectId, deploymentKey), flagKey) ?: return null
+        return json.decodeFromString(flagJson)
     }
 
     // TODO Add in memory caching w/ invalidation
-    override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>? {
+    override suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag> {
         // High volume, use read only redis
-        val jsonEncodedFlags = readOnlyRedis.get(RedisKey.FlagConfigs(projectId, deploymentKey)) ?: return null
-        return json.decodeFromString(jsonEncodedFlags)
+        return readOnlyRedis.hgetall(RedisKey.FlagConfigs(projectId, deploymentKey))
+            ?.mapValues { json.decodeFromString(it.value) } ?: mapOf()
     }
 
-    override suspend fun putFlagConfigs(deploymentKey: String, flagConfigs: List<EvaluationFlag>) {
-        // Optimization so repeat puts don't update the data to the same value in redis.
-        val changed = mutex.withLock {
-            if (flagConfigs != flagConfigCache) {
-                flagConfigCache.clear()
-                flagConfigCache += flagConfigs
-                true
-            } else {
-                false
-            }
-        }
-        if (changed) {
-            val jsonEncodedFlags = json.encodeToString(flagConfigs)
-            redis.set(RedisKey.FlagConfigs(projectId, deploymentKey), jsonEncodedFlags)
+    override suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag) {
+        val flagJson = json.encodeToString(flag)
+        redis.hset(RedisKey.FlagConfigs(projectId, deploymentKey), mapOf(flag.key to flagJson))
+    }
+
+    override suspend fun putAllFlags(deploymentKey: String, flags: List<EvaluationFlag>) {
+        for (flag in flags) {
+            putFlag(deploymentKey, flag)
         }
     }
 
-    override suspend fun removeFlagConfigs(deploymentKey: String) {
-        redis.del(RedisKey.FlagConfigs(projectId, deploymentKey))
-        mutex.withLock {
-            flagConfigCache.clear()
+    override suspend fun removeFlag(deploymentKey: String, flagKey: String) {
+        redis.hdel(RedisKey.FlagConfigs(projectId, deploymentKey), flagKey)
+    }
+
+    override suspend fun removeAllFlags(deploymentKey: String) {
+        val redisKey = RedisKey.FlagConfigs(projectId, deploymentKey)
+        val flags = redis.hgetall(RedisKey.FlagConfigs(projectId, deploymentKey)) ?: return
+        for (key in flags.keys) {
+            redis.hdel(redisKey, key)
         }
     }
 }

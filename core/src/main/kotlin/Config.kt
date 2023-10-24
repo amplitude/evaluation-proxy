@@ -12,11 +12,11 @@ import java.io.File
 
 @Serializable
 data class ProjectsFile(
-    val projects: List<Project>
+    val projects: List<ProjectConfiguration>
 ) {
     companion object {
         fun fromEnv(): ProjectsFile {
-            val project = Project.fromEnv()
+            val project = ProjectConfiguration.fromEnv()
             return ProjectsFile(listOf(project))
         }
 
@@ -58,19 +58,17 @@ data class ConfigurationFile(
 }
 
 @Serializable
-data class Project(
-    val id: String,
+data class ProjectConfiguration(
     val apiKey: String,
     val secretKey: String,
-    val deploymentKeys: Set<String>
+    val managementKey: String
 ) {
     companion object {
-        fun fromEnv(): Project {
-            val id = checkNotNull(stringEnv(EnvKey.PROJECT_ID)) { "${EnvKey.PROJECT_ID} environment variable must be set." }
+        fun fromEnv(): ProjectConfiguration {
             val apiKey = checkNotNull(stringEnv(EnvKey.API_KEY)) { "${EnvKey.API_KEY} environment variable must be set." }
             val secretKey = checkNotNull(stringEnv(EnvKey.SECRET_KEY)) { "${EnvKey.SECRET_KEY} environment variable must be set." }
-            val deploymentKey = checkNotNull(stringEnv(EnvKey.EXPERIMENT_DEPLOYMENT_KEY)) { "${EnvKey.SECRET_KEY} environment variable must be set." }
-            return Project(id, apiKey, secretKey, setOf(deploymentKey))
+            val managementKey = checkNotNull(stringEnv(EnvKey.EXPERIMENT_MANAGEMENT_KEY)) { "${EnvKey.EXPERIMENT_MANAGEMENT_KEY} environment variable must be set." }
+            return ProjectConfiguration(apiKey, secretKey, managementKey)
         }
     }
 }
@@ -80,6 +78,7 @@ data class Configuration(
     val port: Int = Default.PORT,
     val serverUrl: String = Default.SERVER_URL,
     val cohortServerUrl: String = Default.COHORT_SERVER_URL,
+    val deploymentSyncIntervalMillis: Long = Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
     val flagSyncIntervalMillis: Long = Default.FLAG_SYNC_INTERVAL_MILLIS,
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
@@ -91,6 +90,10 @@ data class Configuration(
             port = intEnv(EnvKey.PORT, Default.PORT)!!,
             serverUrl = stringEnv(EnvKey.SERVER_URL, Default.SERVER_URL)!!,
             cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.COHORT_SERVER_URL)!!,
+            deploymentSyncIntervalMillis =  longEnv(
+                EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
+                Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS
+            )!!,
             flagSyncIntervalMillis = longEnv(
                 EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
                 Default.FLAG_SYNC_INTERVAL_MILLIS
@@ -164,11 +167,11 @@ object EnvKey {
     const val SERVER_URL = "AMPLITUDE_SERVER_URL"
     const val COHORT_SERVER_URL = "AMPLITUDE_COHORT_SERVER_URL"
 
-    const val PROJECT_ID = "AMPLITUDE_PROJECT_ID"
     const val API_KEY = "AMPLITUDE_API_KEY"
     const val SECRET_KEY = "AMPLITUDE_SECRET_KEY"
-    const val EXPERIMENT_DEPLOYMENT_KEY = "AMPLITUDE_EXPERIMENT_DEPLOYMENT_KEY"
+    const val EXPERIMENT_MANAGEMENT_KEY = "AMPLITUDE_EXPERIMENT_MANAGEMENT_API_KEY"
 
+    const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = "AMPLITUDE_DEPLOYMENT_SYNC_INTERVAL_MILLIS"
     const val FLAG_SYNC_INTERVAL_MILLIS = "AMPLITUDE_FLAG_SYNC_INTERVAL_MILLIS"
     const val COHORT_SYNC_INTERVAL_MILLIS = "AMPLITUDE_COHORT_SYNC_INTERVAL_MILLIS"
     const val MAX_COHORT_SIZE = "AMPLITUDE_MAX_COHORT_SIZE"
@@ -187,6 +190,7 @@ object Default {
     const val PORT = 3546
     const val SERVER_URL = "https://flag.lab.amplitude.com"
     const val COHORT_SERVER_URL = "https://cohort.lab.amplitude.com"
+    const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val MAX_COHORT_SIZE = Int.MAX_VALUE

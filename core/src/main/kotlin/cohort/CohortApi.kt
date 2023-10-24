@@ -51,6 +51,8 @@ data class GetCohortAsyncResponse(
 )
 
 interface CohortApi {
+
+    suspend fun getCohortDescription(cohortId: String): CohortDescription
     suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription>
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>
 }
@@ -72,20 +74,24 @@ class CohortApiV5(
         }
     }
 
+    override suspend fun getCohortDescription(cohortId: String): CohortDescription {
+        val response = retry(onFailure = { e -> log.info("Get cohort descriptions failed: $e") }) {
+            client.get(serverUrl, "/api/3/cohorts/info/$cohortId") {
+                headers { set("Authorization", "Basic $basicAuth") }
+            }
+        }
+        val serialDescription = json.decodeFromString<SerialSingleCohortDescription>(response.body())
+        return CohortDescription(
+            id = serialDescription.cohortId,
+            lastComputed = serialDescription.lastComputed,
+            size = serialDescription.size
+        )
+    }
+
     override suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription> {
         log.debug("getCohortDescriptions: start")
         return cohortIds.map { cohortId ->
-            val response = retry(onFailure = { e -> log.info("Get cohort descriptions failed: $e") }) {
-                client.get(serverUrl, "/api/3/cohorts/info/$cohortId") {
-                    headers { set("Authorization", "Basic $basicAuth") }
-                }
-            }
-            val serialDescription = json.decodeFromString<SerialSingleCohortDescription>(response.body())
-            CohortDescription(
-                id = serialDescription.cohortId,
-                lastComputed = serialDescription.lastComputed,
-                size = serialDescription.size
-            )
+            getCohortDescription(cohortId)
         }.toList().also { log.debug("getCohortDescriptions: end - result=$it") }
     }
 

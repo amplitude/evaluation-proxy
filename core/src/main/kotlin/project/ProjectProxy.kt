@@ -2,13 +2,12 @@ package com.amplitude.project
 
 import com.amplitude.Configuration
 import com.amplitude.HttpErrorResponseException
-import com.amplitude.Project
-import com.amplitude.assignment.AmplitudeAssignmentTracker
 import com.amplitude.assignment.Assignment
+import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.CohortApiV5
-import com.amplitude.cohort.getCohortStorage
+import com.amplitude.cohort.CohortStorage
 import com.amplitude.deployment.DeploymentApiV1
-import com.amplitude.deployment.getDeploymentStorage
+import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
 import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.experiment.evaluation.EvaluationVariant
@@ -18,12 +17,13 @@ import com.amplitude.util.logger
 import com.amplitude.util.toEvaluationContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 
-class ProjectProxy(
+internal class ProjectProxy(
     private val project: Project,
-    configuration: Configuration = Configuration()
+    configuration: Configuration,
+    private val assignmentTracker: AssignmentTracker,
+    private val deploymentStorage: DeploymentStorage,
+    private val cohortStorage: CohortStorage,
 ) {
 
     companion object {
@@ -32,17 +32,12 @@ class ProjectProxy(
 
     private val engine = EvaluationEngineImpl()
 
-    private val assignmentTracker = AmplitudeAssignmentTracker(project.apiKey, configuration.assignment)
+    private val projectApi = ProjectApiV1(project.managementKey)
     private val deploymentApi = DeploymentApiV1(configuration.serverUrl)
-    private val deploymentStorage = getDeploymentStorage(project.id, configuration.redis)
     private val cohortApi = CohortApiV5(configuration.cohortServerUrl, project.apiKey, project.secretKey)
-    private val cohortStorage = getCohortStorage(
-        project.id,
-        configuration.redis,
-        configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
-    )
     private val projectRunner = ProjectRunner(
         configuration,
+        projectApi,
         deploymentApi,
         deploymentStorage,
         cohortApi,
@@ -50,22 +45,12 @@ class ProjectProxy(
     )
 
     suspend fun start() {
-        log.info("Starting project. projectId=${project.id} deploymentKeys=${project.deploymentKeys}")
-        // Add deployments to storage
-        for (deploymentKey in project.deploymentKeys) {
-            deploymentStorage.putDeployment(deploymentKey)
-        }
-        // Remove deployments which are no longer being managed
-        val storageDeploymentKeys = deploymentStorage.getDeployments()
-        for (storageDeploymentKey in storageDeploymentKeys - project.deploymentKeys) {
-            deploymentStorage.removeDeployment(storageDeploymentKey)
-            deploymentStorage.removeFlagConfigs(storageDeploymentKey)
-        }
+        log.info("Starting project. projectId=${project.id}")
         projectRunner.start()
     }
 
     suspend fun shutdown() {
-        log.info("Shutting down project. projectId=${project.id}")
+        log.info("Shutting down project. project.id=${project.id}")
         projectRunner.stop()
     }
 
@@ -73,8 +58,7 @@ class ProjectProxy(
         if (deploymentKey.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
-        return deploymentStorage.getFlagConfigs(deploymentKey)
-            ?: throw HttpErrorResponseException(status = 404, message = "Unknown deployment.")
+        return deploymentStorage.getAllFlags(deploymentKey).values.toList()
     }
 
     suspend fun getCohortMembershipsForUser(deploymentKey: String?, userId: String?): Set<String> {
@@ -84,8 +68,7 @@ class ProjectProxy(
         if (userId.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 400, message = "Invalid user ID.")
         }
-        val cohortIds = deploymentStorage.getFlagConfigs(deploymentKey)?.getCohortIds()
-            ?: throw HttpErrorResponseException(status = 404, message = "Unknown deployment.")
+        val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getCohortIds()
         return cohortStorage.getCohortMembershipsForUser(userId, cohortIds)
     }
 
@@ -98,8 +81,8 @@ class ProjectProxy(
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
         // Get flag configs for the deployment from storage and topo sort.
-        val storageFlags = deploymentStorage.getFlagConfigs(deploymentKey)
-        if (storageFlags.isNullOrEmpty()) {
+        val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
+        if (storageFlags.isEmpty()) {
             return mapOf()
         }
         val flags = topologicalSort(storageFlags, flagKeys ?: setOf())
@@ -137,5 +120,11 @@ class ProjectProxy(
             val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
             (!default && deployed)
         }
+    }
+
+    // Internal
+
+    internal suspend fun getDeployments(): Set<String> {
+        return deploymentStorage.getDeployments()
     }
 }
