@@ -41,9 +41,7 @@ class DeploymentRunner(
             while (true) {
                 delay(configuration.cohortSyncIntervalMillis)
                 val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getCohortIds()
-                for (cohortId in cohortIds) {
-                    cohortLoader.loadCohort(cohortId)
-                }
+                cohortLoader.loadCohorts(cohortIds)
             }
         }
     }

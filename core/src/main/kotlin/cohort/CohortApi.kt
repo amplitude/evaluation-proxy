@@ -96,21 +96,21 @@ class CohortApiV5(
     }
 
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
-        log.debug("getCohortMembers: start - cohortDescription=$cohortDescription")
+        log.debug("getCohortMembers: start - cohortDescription={}", cohortDescription)
         // Initiate async cohort download
         val initialResponse = client.get(serverUrl, "/api/5/cohorts/request/${cohortDescription.id}") {
             headers { set("Authorization", "Basic $basicAuth") }
             parameter("lastComputed", cohortDescription.lastComputed)
         }
         val getCohortResponse = json.decodeFromString<GetCohortAsyncResponse>(initialResponse.body())
-        log.debug("getCohortMembers: cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
+        log.debug("getCohortMembers: poll for status - cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
         // Poll until the cohort is ready for download
         while (true) {
             val statusResponse =
                 client.get(serverUrl, "/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
                 }
-            log.debug("getCohortMembers: cohortId=${cohortDescription.id}, status=${statusResponse.status}")
+            log.trace("getCohortMembers: cohortId={}, status={}", cohortDescription.id, statusResponse.status)
             if (statusResponse.status == HttpStatusCode.OK) {
                 break
             } else if (statusResponse.status != HttpStatusCode.Accepted) {
@@ -119,6 +119,7 @@ class CohortApiV5(
             delay(5000)
         }
         // Download the cohort
+        log.debug("getCohortMembers: download cohort - cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
         val downloadResponse =
             client.get(serverUrl, "/api/5/cohorts/request/${getCohortResponse.requestId}/file") {
                 headers { set("Authorization", "Basic $basicAuth") }

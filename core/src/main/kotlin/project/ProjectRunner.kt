@@ -65,31 +65,33 @@ internal class ProjectRunner(
         // Get deployments from API and update the storage.
         val networkDeployments = projectApi.getDeployments().map { it.key }.toSet()
         val storageDeployments = deploymentStorage.getDeployments()
+        val runningDeployments = deploymentRunners.keys
+        // Determine added and removed deployments
         val addedDeployments = networkDeployments - storageDeployments
         val removedDeployments = storageDeployments - networkDeployments
+        val startingDeployments = networkDeployments - runningDeployments
         val jobs = mutableListOf<Job>()
         for (addedDeployment in addedDeployments) {
             log.info("Adding deployment $addedDeployment")
             deploymentStorage.putDeployment(addedDeployment)
-            if (!deploymentRunners.contains(addedDeployment)) {
-                jobs += scope.launch { addDeploymentInternal(addedDeployment) }
-            }
+        }
+        for (deployment in startingDeployments) {
+            jobs += scope.launch { addDeploymentInternal(deployment) }
         }
         for (removedDeployment in removedDeployments) {
             log.info("Removing deployment $removedDeployment")
             deploymentStorage.removeAllFlags(removedDeployment)
             deploymentStorage.removeDeploymentInternal(removedDeployment)
-            if (deploymentRunners.contains(removedDeployment)) {
-                jobs += scope.launch { removeDeploymentInternal(removedDeployment) }
-            }
+            jobs += scope.launch { removeDeploymentInternal(removedDeployment) }
         }
         jobs.joinAll()
         // Keep cohorts which are targeted by all stored deployments.
         removeUnusedCohorts(networkDeployments)
         log.debug(
-            "Project refresh finished: addedDeployments={}, removedDeployments={}",
+            "Project refresh finished: addedDeployments={}, removedDeployments={}, startedDeployments={}",
             addedDeployments,
-            removedDeployments
+            removedDeployments,
+            startingDeployments
         )
         log.trace("refresh: end")
     }
@@ -97,6 +99,9 @@ internal class ProjectRunner(
 
     // Must be run within lock
     private suspend fun addDeploymentInternal(deploymentKey: String) {
+        if (deploymentRunners.contains(deploymentKey)) {
+            return
+        }
         log.debug("Adding and starting deployment runner for $deploymentKey")
         val deploymentRunner = DeploymentRunner(
             configuration,

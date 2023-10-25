@@ -5,6 +5,7 @@ import com.amplitude.HttpErrorResponseException
 import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.CohortApiV5
+import com.amplitude.cohort.CohortDescription
 import com.amplitude.cohort.CohortStorage
 import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.DeploymentStorage
@@ -59,6 +60,24 @@ internal class ProjectProxy(
             throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
         }
         return deploymentStorage.getAllFlags(deploymentKey).values.toList()
+    }
+
+    suspend fun getCohortDescription(cohortId: String?): CohortDescription {
+        if (cohortId.isNullOrEmpty()) {
+            throw HttpErrorResponseException(status = 404, message = "Cohort not found.")
+        }
+        return cohortStorage.getCohortDescription(cohortId)
+            ?: throw HttpErrorResponseException(status = 404, message = "Cohort not found.")
+    }
+
+    suspend fun getCohortMembers(cohortId: String?): Set<String> {
+        if (cohortId.isNullOrEmpty()) {
+            throw HttpErrorResponseException(status = 404, message = "Cohort not found.")
+        }
+        val cohortDescription = cohortStorage.getCohortDescription(cohortId)
+            ?: throw HttpErrorResponseException(status = 404, message = "Cohort not found.")
+        return cohortStorage.getCohortMembers(cohortDescription)
+            ?: throw HttpErrorResponseException(status = 404, message = "Cohort not found.")
     }
 
     suspend fun getCohortMembershipsForUser(deploymentKey: String?, userId: String?): Set<String> {

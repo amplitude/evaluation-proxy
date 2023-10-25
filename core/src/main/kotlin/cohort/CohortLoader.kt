@@ -3,6 +3,7 @@ package com.amplitude.cohort
 import com.amplitude.util.logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -19,7 +20,15 @@ class CohortLoader(
     private val jobsMutex = Mutex()
     private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun loadCohort(cohortId: String) = coroutineScope {
+    suspend fun loadCohorts(cohortIds: Set<String>) = coroutineScope {
+        val jobs = mutableListOf<Job>()
+        for (cohortId in cohortIds) {
+            jobs += launch { loadCohort(cohortId) }
+        }
+        jobs.joinAll()
+    }
+
+    private suspend fun loadCohort(cohortId: String) = coroutineScope {
         log.trace("loadCohort: start - cohortId={}", cohortId)
         val networkCohort = cohortApi.getCohortDescription(cohortId)
         val storageCohort = cohortStorage.getCohortDescription(cohortId)
@@ -33,6 +42,7 @@ class CohortLoader(
                         val cohortMembers = cohortApi.getCohortMembers(networkCohort)
                         cohortStorage.putCohort(networkCohort, cohortMembers)
                         jobsMutex.withLock { jobs.remove(cohortId) }
+                        log.info("Cohort download complete. $networkCohort")
                     }
                 }
             }.join()

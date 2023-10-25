@@ -7,6 +7,7 @@ import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
@@ -118,6 +119,30 @@ fun Application.proxyServer() {
             val deployment = this.call.request.getDeploymentKey()
             val result = try {
                 evaluationProxy.getSerializedFlagConfigs(deployment)
+            } catch (e: HttpErrorResponseException) {
+                call.respond(HttpStatusCode.fromValue(e.status), e.message)
+                return@get
+            }
+            call.respond(result)
+        }
+
+        get("/sdk/v2/cohorts/{cohortId}/description") {
+            val deployment = this.call.request.getDeploymentKey()
+            val cohortId = this.call.parameters["cohortId"]
+            val result = try {
+                evaluationProxy.getSerializedCohortDescription(deployment, cohortId)
+            } catch (e: HttpErrorResponseException) {
+                call.respond(HttpStatusCode.fromValue(e.status), e.message)
+                return@get
+            }
+            call.respond(result)
+        }
+
+        get("/sdk/v2/cohorts/{cohortId}/members") {
+            val deployment = this.call.request.getDeploymentKey()
+            val cohortId = this.call.parameters["cohortId"]
+            val result = try {
+                evaluationProxy.getSerializedCohortMembers(deployment, cohortId)
             } catch (e: HttpErrorResponseException) {
                 call.respond(HttpStatusCode.fromValue(e.status), e.message)
                 return@get

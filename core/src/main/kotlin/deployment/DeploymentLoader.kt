@@ -32,9 +32,7 @@ class DeploymentLoader(
                         val cohortIds = flag.getCohortIds()
                         if (cohortIds.isNotEmpty()) {
                             launch {
-                                for (cohortId in cohortIds) {
-                                    cohortLoader.loadCohort(cohortId)
-                                }
+                                cohortLoader.loadCohorts(cohortIds)
                                 deploymentStorage.putFlag(deploymentKey, flag)
                             }
                         } else {

@@ -1,6 +1,7 @@
 package com.amplitude
 
 import com.amplitude.assignment.AmplitudeAssignmentTracker
+import com.amplitude.cohort.CohortDescription
 import com.amplitude.cohort.getCohortStorage
 import com.amplitude.deployment.getDeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationFlag
@@ -167,6 +168,16 @@ class EvaluationProxy(
         return projectProxy.getFlagConfigs(deploymentKey)
     }
 
+    suspend fun getCohortDescription(deploymentKey: String?, cohortId: String?): CohortDescription {
+        val projectProxy = getProjectProxy(deploymentKey)
+        return projectProxy.getCohortDescription(cohortId)
+    }
+
+    suspend fun getCohortMembers(deploymentKey: String?, cohortId: String?): Set<String> {
+        val projectProxy = getProjectProxy(deploymentKey)
+        return projectProxy.getCohortMembers(cohortId)
+    }
+
     suspend fun getCohortMembershipsForUser(deploymentKey: String?, userId: String?): Set<String> {
         val projectProxy = getProjectProxy(deploymentKey)
         return projectProxy.getCohortMembershipsForUser(deploymentKey, userId)
@@ -201,6 +212,12 @@ class EvaluationProxy(
 }
 
 // Serialized Proxy Calls
+
+suspend fun EvaluationProxy.getSerializedCohortDescription(deploymentKey: String?, cohortId: String?): String =
+    json.encodeToString(getCohortDescription(deploymentKey, cohortId))
+
+suspend fun EvaluationProxy.getSerializedCohortMembers(deploymentKey: String?, cohortId: String?): String =
+    json.encodeToString(getCohortMembers(deploymentKey, cohortId))
 
 suspend fun EvaluationProxy.getSerializedFlagConfigs(deploymentKey: String?): String =
     json.encodeToString(getFlagConfigs(deploymentKey))

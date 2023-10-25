@@ -12,6 +12,7 @@ import kotlin.time.Duration
 interface CohortStorage {
     suspend fun getCohortDescription(cohortId: String): CohortDescription?
     suspend fun getCohortDescriptions(): Map<String, CohortDescription>
+    suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>?
     suspend fun getCohortMembershipsForUser(userId: String, cohortIds: Set<String>? = null): Set<String>
     suspend fun putCohort(description: CohortDescription, members: Set<String>)
     suspend fun removeCohort(cohortDescription: CohortDescription)
@@ -44,6 +45,10 @@ class InMemoryCohortStorage : CohortStorage {
 
     override suspend fun getCohortDescriptions(): Map<String, CohortDescription> {
         return lock.withLock { cohorts.mapValues { it.value.description } }
+    }
+
+    override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>? {
+        return lock.withLock { cohorts[cohortDescription.id]?.members }
     }
 
     override suspend fun putCohort(description: CohortDescription, members: Set<String>) {
@@ -85,6 +90,10 @@ class RedisCohortStorage(
     override suspend fun getCohortDescriptions(): Map<String, CohortDescription> {
         val jsonEncodedDescriptions = redis.hgetall(RedisKey.CohortDescriptions(projectId))
         return jsonEncodedDescriptions?.mapValues { json.decodeFromString(it.value) } ?: mapOf()
+    }
+
+    override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>? {
+        return redis.smembers(RedisKey.CohortMembers(projectId, cohortDescription))
     }
 
     override suspend fun getCohortMembershipsForUser(userId: String, cohortIds: Set<String>?): Set<String> {
