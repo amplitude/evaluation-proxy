@@ -121,10 +121,10 @@ class EvaluationProxy(
             )
             // Remove all deployments for project
             val deployments = deploymentStorage.getDeployments()
-            for (deployment in deployments) {
-                log.info("Removing deployment and flag configs for deployment $deployment for project $projectId")
-                deploymentStorage.removeDeploymentInternal(deployment)
-                deploymentStorage.removeAllFlags(deployment)
+            for ((deploymentKey, _) in deployments) {
+                log.info("Removing deployment and flag configs for deployment $deploymentKey for project $projectId")
+                deploymentStorage.removeDeployment(deploymentKey)
+                deploymentStorage.removeAllFlags(deploymentKey)
             }
             // Remove all cohorts for project
             val cohortDescriptions = cohortStorage.getCohortDescriptions().values

@@ -144,6 +144,6 @@ internal class ProjectProxy(
     // Internal
 
     internal suspend fun getDeployments(): Set<String> {
-        return deploymentStorage.getDeployments()
+        return deploymentStorage.getDeployments().keys
     }
 }

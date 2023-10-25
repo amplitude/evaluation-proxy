@@ -1,5 +1,6 @@
 package com.amplitude.project
 
+import com.amplitude.deployment.Deployment
 import com.amplitude.util.get
 import com.amplitude.util.json
 import com.amplitude.util.logger
@@ -16,16 +17,21 @@ private const val MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
 
 @Serializable
 private data class DeploymentsResponse(
-    val deployments: List<Deployment>
+    val deployments: List<SerialDeployment>
 )
 @Serializable
-internal data class Deployment(
+internal data class SerialDeployment(
     val id: String,
     val projectId: String,
     val label: String,
     val key: String,
     val deleted: Boolean,
 )
+
+private fun SerialDeployment.toDeployment(): Deployment? {
+    if (deleted) return null
+    return Deployment(id, projectId, label, key)
+}
 
 internal interface ProjectApi {
     suspend fun getDeployments(): List<Deployment>
@@ -54,7 +60,7 @@ internal class ProjectApiV1(private val managementKey: String): ProjectApi {
         }
         return json.decodeFromString<DeploymentsResponse>(response.body())
             .deployments
-            .filter { !it.deleted }
+            .mapNotNull { it.toDeployment() }
             .also { log.trace("getDeployments: end") }
     }
 }

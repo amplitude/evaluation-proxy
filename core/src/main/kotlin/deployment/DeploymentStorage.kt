@@ -11,9 +11,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 
 internal interface DeploymentStorage {
-    suspend fun getDeployments(): Set<String>
-    suspend fun putDeployment(deploymentKey: String)
-    suspend fun removeDeploymentInternal(deploymentKey: String)
+    suspend fun getDeployment(deploymentKey: String): Deployment?
+    suspend fun getDeployments(): Map<String, Deployment>
+    suspend fun putDeployment(deployment: Deployment)
+    suspend fun removeDeployment(deploymentKey: String)
     suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag?
     suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag>
     suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag)
@@ -39,60 +40,68 @@ internal fun getDeploymentStorage(projectId: String, redisConfiguration: RedisCo
 
 internal class InMemoryDeploymentStorage : DeploymentStorage {
 
-    private val lock = Mutex()
-    private val deploymentStorage = mutableMapOf<String, MutableMap<String, EvaluationFlag>?>()
+    private val mutex = Mutex()
 
-    override suspend fun getDeployments(): Set<String> {
-        return lock.withLock {
-            deploymentStorage.keys.toSet()
+    private val deploymentStorage = mutableMapOf<String, Deployment>()
+    private val flagStorage = mutableMapOf<String, MutableMap<String, EvaluationFlag>>()
+    override suspend fun getDeployment(deploymentKey: String): Deployment? {
+        return mutex.withLock {
+            deploymentStorage[deploymentKey]
         }
     }
 
-    override suspend fun putDeployment(deploymentKey: String) {
-        return lock.withLock {
-            deploymentStorage.putIfAbsent(deploymentKey, null)
+    override suspend fun getDeployments(): Map<String, Deployment> {
+        return mutex.withLock {
+            deploymentStorage.toMap()
         }
     }
 
-    override suspend fun removeDeploymentInternal(deploymentKey: String) {
-        return lock.withLock {
+    override suspend fun putDeployment(deployment: Deployment) {
+        mutex.withLock {
+            deploymentStorage[deployment.key] = deployment
+        }
+    }
+
+    override suspend fun removeDeployment(deploymentKey: String) {
+        return mutex.withLock {
             deploymentStorage.remove(deploymentKey)
+            flagStorage.remove(deploymentKey)
         }
     }
 
     override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.get(flagKey)
+        return mutex.withLock {
+            flagStorage[deploymentKey]?.get(flagKey)
         }
     }
 
     override suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag> {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.toMap() ?: mapOf()
+        return mutex.withLock {
+            flagStorage[deploymentKey] ?: mapOf()
         }
     }
 
     override suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag) {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.put(flag.key, flag)
+        return mutex.withLock {
+            flagStorage.getOrPut(deploymentKey) { mutableMapOf() }[flag.key] = flag
         }
     }
 
     override suspend fun putAllFlags(deploymentKey: String, flags: List<EvaluationFlag>) {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.putAll(flags.associateBy { it.key })
+        return mutex.withLock {
+            flagStorage.getOrPut(deploymentKey) { mutableMapOf() }.putAll(flags.associateBy { it.key })
         }
     }
 
     override suspend fun removeFlag(deploymentKey: String, flagKey: String) {
-        return lock.withLock {
-            deploymentStorage[deploymentKey]?.remove(flagKey)
+        return mutex.withLock {
+            flagStorage[deploymentKey]?.remove(flagKey)
         }
     }
 
     override suspend fun removeAllFlags(deploymentKey: String) {
-        return lock.withLock {
-            deploymentStorage[deploymentKey] = null
+        return mutex.withLock {
+            flagStorage.remove(deploymentKey)
         }
     }
 }
@@ -103,17 +112,23 @@ internal class RedisDeploymentStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
-
-    override suspend fun getDeployments(): Set<String> {
-        return redis.smembers(RedisKey.Deployments(prefix, projectId)) ?: emptySet()
+    override suspend fun getDeployment(deploymentKey: String): Deployment? {
+        val deploymentJson = redis.hget(RedisKey.Deployments(prefix, projectId), deploymentKey) ?: return null
+        return json.decodeFromString(deploymentJson)
     }
 
-    override suspend fun putDeployment(deploymentKey: String) {
-        redis.sadd(RedisKey.Deployments(prefix, projectId), setOf(deploymentKey))
+    override suspend fun getDeployments(): Map<String, Deployment> {
+        return redis.hgetall(RedisKey.Deployments(prefix, projectId))
+            ?.mapValues { json.decodeFromString(it.value) } ?: mapOf()
     }
 
-    override suspend fun removeDeploymentInternal(deploymentKey: String) {
-        redis.srem(RedisKey.Deployments(prefix, projectId), deploymentKey)
+    override suspend fun putDeployment(deployment: Deployment) {
+        val deploymentJson = json.encodeToString(deployment)
+        redis.hset(RedisKey.Deployments(prefix, projectId), mapOf(deployment.key to  deploymentJson))
+    }
+
+    override suspend fun removeDeployment(deploymentKey: String) {
+        redis.hdel(RedisKey.Deployments(prefix, projectId), deploymentKey)
     }
 
     override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {

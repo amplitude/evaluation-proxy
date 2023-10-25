@@ -63,35 +63,34 @@ internal class ProjectRunner(
     private suspend fun refresh() = lock.withLock {
         log.trace("refresh: start")
         // Get deployments from API and update the storage.
-        val networkDeployments = projectApi.getDeployments().map { it.key }.toSet()
+        val networkDeployments = projectApi.getDeployments().associateBy { it.key }
         val storageDeployments = deploymentStorage.getDeployments()
-        val runningDeployments = deploymentRunners.keys
         // Determine added and removed deployments
-        val addedDeployments = networkDeployments - storageDeployments
-        val removedDeployments = storageDeployments - networkDeployments
-        val startingDeployments = networkDeployments - runningDeployments
+        val addedDeployments = networkDeployments - storageDeployments.keys
+        val removedDeployments = storageDeployments - networkDeployments.keys
+        val startingDeployments = networkDeployments - deploymentRunners.keys
         val jobs = mutableListOf<Job>()
-        for (addedDeployment in addedDeployments) {
+        for ((_, addedDeployment) in addedDeployments) {
             log.info("Adding deployment $addedDeployment")
             deploymentStorage.putDeployment(addedDeployment)
         }
-        for (deployment in startingDeployments) {
-            jobs += scope.launch { addDeploymentInternal(deployment) }
+        for ((_, deployment) in startingDeployments) {
+            jobs += scope.launch { addDeploymentInternal(deployment.key) }
         }
-        for (removedDeployment in removedDeployments) {
+        for ((_, removedDeployment) in removedDeployments) {
             log.info("Removing deployment $removedDeployment")
-            deploymentStorage.removeAllFlags(removedDeployment)
-            deploymentStorage.removeDeploymentInternal(removedDeployment)
-            jobs += scope.launch { removeDeploymentInternal(removedDeployment) }
+            deploymentStorage.removeAllFlags(removedDeployment.key)
+            deploymentStorage.removeDeployment(removedDeployment.key)
+            jobs += scope.launch { removeDeploymentInternal(removedDeployment.key) }
         }
         jobs.joinAll()
         // Keep cohorts which are targeted by all stored deployments.
-        removeUnusedCohorts(networkDeployments)
+        removeUnusedCohorts(networkDeployments.keys)
         log.debug(
             "Project refresh finished: addedDeployments={}, removedDeployments={}, startedDeployments={}",
-            addedDeployments,
-            removedDeployments,
-            startingDeployments
+            addedDeployments.keys,
+            removedDeployments.keys,
+            startingDeployments.keys
         )
         log.trace("refresh: end")
     }
