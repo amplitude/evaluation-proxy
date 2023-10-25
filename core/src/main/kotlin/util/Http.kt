@@ -32,7 +32,7 @@ internal suspend fun retry(
     for (i in 0..config.times) {
         try {
             val response = block()
-            if (response.status.value in 200..299) {
+            if (response.status.value in 100..399) {
                 return response
             } else {
                 throw HttpErrorException(response.status, response)
