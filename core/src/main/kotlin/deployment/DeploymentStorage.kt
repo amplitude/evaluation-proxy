@@ -7,13 +7,12 @@ import com.amplitude.util.RedisKey
 import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
 interface DeploymentStorage {
     suspend fun getDeployments(): Set<String>
     suspend fun putDeployment(deploymentKey: String)
-    suspend fun removeDeployment(deploymentKey: String)
+    suspend fun removeDeploymentInternal(deploymentKey: String)
     suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag?
     suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag>
     suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag)
@@ -50,7 +49,7 @@ class InMemoryDeploymentStorage : DeploymentStorage {
         }
     }
 
-    override suspend fun removeDeployment(deploymentKey: String) {
+    override suspend fun removeDeploymentInternal(deploymentKey: String) {
         return lock.withLock {
             deploymentStorage.remove(deploymentKey)
         }
@@ -111,7 +110,7 @@ class RedisDeploymentStorage(
         redis.sadd(RedisKey.Deployments(projectId), setOf(deploymentKey))
     }
 
-    override suspend fun removeDeployment(deploymentKey: String) {
+    override suspend fun removeDeploymentInternal(deploymentKey: String) {
         redis.srem(RedisKey.Deployments(projectId), deploymentKey)
     }
 

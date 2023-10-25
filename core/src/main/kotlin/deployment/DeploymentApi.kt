@@ -10,6 +10,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.headers
+import io.ktor.client.request.parameter
 
 interface DeploymentApi {
     suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>
@@ -26,9 +27,10 @@ class DeploymentApiV1(
     private val client = HttpClient(OkHttp)
 
     override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag> {
-        log.debug("getFlagConfigs: start - deploymentKey=$deploymentKey")
-        val response = retry(onFailure = { e -> log.info("Get flag configs failed: $e") }) {
-            client.get(serverUrl, "/sdk/v2/flags?v=0") {
+        log.trace("getFlagConfigs: start - deploymentKey=$deploymentKey")
+        val response = retry(onFailure = { e -> log.error("Get flag configs failed: $e") }) {
+            client.get(serverUrl, "/sdk/v2/flags") {
+                parameter("v", "0")
                 headers {
                     set("Authorization", "Api-Key $deploymentKey")
                     set("X-Amp-Exp-Library", "experiment-local-proxy/$VERSION")
@@ -36,7 +38,7 @@ class DeploymentApiV1(
             }
         }
         return json.decodeFromString<List<EvaluationFlag>>(response.body()).also {
-            log.debug("getFlagConfigs: end - deploymentKey=$deploymentKey")
+            log.trace("getFlagConfigs: end - deploymentKey=$deploymentKey")
         }
     }
 }

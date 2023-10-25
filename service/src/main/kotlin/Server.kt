@@ -93,7 +93,7 @@ fun Application.proxyServer() {
     configureLogging()
     configureMetrics()
     install(ContentNegotiation) {
-        json()
+        json(json)
     }
     install(
         createApplicationPlugin("shutdown") {
@@ -111,6 +111,9 @@ fun Application.proxyServer() {
      * Configure endpoints.
      */
     routing {
+
+        // Local Evaluation
+
         get("/sdk/v2/flags") {
             val deployment = this.call.request.getDeploymentKey()
             val result = try {
@@ -134,7 +137,7 @@ fun Application.proxyServer() {
             call.respond(result)
         }
 
-        // V2 evaluation endpoints
+        // Remote Evaluation V2 Endpoints
 
         get("/sdk/v2/vardata") {
             call.evaluate(evaluationProxy, ApplicationRequest::getUserFromHeader)
@@ -144,7 +147,7 @@ fun Application.proxyServer() {
             call.evaluate(evaluationProxy, ApplicationRequest::getUserFromBody)
         }
 
-        // V1 evaluation endpoints
+        // Remote Evaluation V1 endpoints
 
         get("/sdk/vardata") {
             call.evaluateV1(evaluationProxy, ApplicationRequest::getUserFromHeader)
@@ -162,7 +165,7 @@ fun Application.proxyServer() {
             call.evaluateV1(evaluationProxy, ApplicationRequest::getUserFromBody)
         }
 
-        // Health check
+        // Health Check
 
         get("/status") {
             call.respond("OK")

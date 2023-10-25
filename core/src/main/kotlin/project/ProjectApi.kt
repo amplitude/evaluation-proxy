@@ -13,6 +13,11 @@ import kotlinx.serialization.Serializable
 
 private const val MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
 
+
+@Serializable
+private data class DeploymentsResponse(
+    val deployments: List<Deployment>
+)
 @Serializable
 internal data class Deployment(
     val id: String,
@@ -38,7 +43,7 @@ internal class ProjectApiV1(private val managementKey: String): ProjectApi {
         }
     }
     override suspend fun getDeployments(): List<Deployment> {
-        log.debug("getDeployments: start")
+        log.trace("getDeployments: start")
         val response = retry(onFailure = { e -> log.error("Get deployments failed: $e") }) {
             client.get(MANAGEMENT_SERVER_URL, "/api/1/deployments") {
                 headers {
@@ -47,8 +52,9 @@ internal class ProjectApiV1(private val managementKey: String): ProjectApi {
                 }
             }
         }
-        return json.decodeFromString<List<Deployment>>(response.body())
+        return json.decodeFromString<DeploymentsResponse>(response.body())
+            .deployments
             .filter { !it.deleted }
-            .also { log.debug("getDeployments: end") }
+            .also { log.trace("getDeployments: end") }
     }
 }

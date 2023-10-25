@@ -27,7 +27,7 @@ class DeploymentRunner(
     private val deploymentLoader = DeploymentLoader(deploymentApi, deploymentStorage, cohortLoader)
 
     suspend fun start() {
-        log.debug("start: - deploymentKey=$deploymentKey")
+        log.trace("start: - deploymentKey=$deploymentKey")
         deploymentLoader.loadDeployment(deploymentKey)
         // Periodic flag config loader
         scope.launch {

@@ -20,7 +20,7 @@ class CohortLoader(
     private val jobs = mutableMapOf<String, Job>()
 
     suspend fun loadCohort(cohortId: String) = coroutineScope {
-        log.debug("loadCohort: start - cohortId={}", cohortId)
+        log.trace("loadCohort: start - cohortId={}", cohortId)
         val networkCohort = cohortApi.getCohortDescription(cohortId)
         val storageCohort = cohortStorage.getCohortDescription(cohortId)
         val shouldDownloadCohort = networkCohort.size <= maxCohortSize &&
@@ -37,5 +37,6 @@ class CohortLoader(
                 }
             }.join()
         }
+        log.trace("loadCohort: end - cohortId={}", cohortId)
     }
 }

@@ -23,7 +23,7 @@ class DeploymentLoader(
     private val jobs = mutableMapOf<String, Job>()
 
     suspend fun loadDeployment(deploymentKey: String) = coroutineScope {
-        log.debug("loadDeployment: - deploymentKey=$deploymentKey")
+        log.trace("loadDeployment: - deploymentKey=$deploymentKey")
         jobsMutex.withLock {
             jobs.getOrPut(deploymentKey) {
                 launch {
@@ -44,6 +44,6 @@ class DeploymentLoader(
                 }
             }
         }.join()
-        log.debug("loadDeployment: end - deploymentKey=$deploymentKey")
+        log.trace("loadDeployment: end - deploymentKey=$deploymentKey")
     }
 }

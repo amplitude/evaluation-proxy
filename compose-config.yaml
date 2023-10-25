@@ -1,9 +1,7 @@
 projects:
-  - id: "TODO"
-    apiKey: "TODO"
+  - apiKey: "TODO"
     secretKey: "TODO"
-    deploymentKeys:
-      - "TODO"
+    managementKey: "TODO"
 
 configuration:
   redis:

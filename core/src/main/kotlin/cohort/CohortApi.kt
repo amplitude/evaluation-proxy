@@ -1,6 +1,6 @@
 package com.amplitude.cohort
 
-import com.amplitude.util.HttpErrorResponseException
+import com.amplitude.util.HttpErrorException
 import com.amplitude.util.get
 import com.amplitude.util.json
 import com.amplitude.util.logger
@@ -114,9 +114,9 @@ class CohortApiV5(
             if (statusResponse.status == HttpStatusCode.OK) {
                 break
             } else if (statusResponse.status != HttpStatusCode.Accepted) {
-                throw HttpErrorResponseException(statusResponse.status)
+                throw HttpErrorException(statusResponse.status, statusResponse)
             }
-            delay(1000)
+            delay(5000)
         }
         // Download the cohort
         val downloadResponse =

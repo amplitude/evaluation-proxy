@@ -105,7 +105,7 @@ class EvaluationProxy(
         // Add all configured projects to storage
         val projectIds = projectProxies.map { it.key.id }.toSet()
         for (projectId in projectIds) {
-            log.info("Adding project $projectId")
+            log.debug("Adding project $projectId")
             projectStorage.putProject(projectId)
         }
         // Remove all non-configured projects and associated data
@@ -122,7 +122,7 @@ class EvaluationProxy(
             val deployments = deploymentStorage.getDeployments()
             for (deployment in deployments) {
                 log.info("Removing deployment and flag configs for deployment $deployment for project $projectId")
-                deploymentStorage.removeDeployment(deployment)
+                deploymentStorage.removeDeploymentInternal(deployment)
                 deploymentStorage.removeAllFlags(deployment)
             }
             // Remove all cohorts for project

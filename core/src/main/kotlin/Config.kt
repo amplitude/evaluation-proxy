@@ -5,7 +5,9 @@ import com.amplitude.util.intEnv
 import com.amplitude.util.json
 import com.amplitude.util.longEnv
 import com.amplitude.util.stringEnv
+import com.amplitude.util.yaml
 import com.charleskorn.kaml.Yaml
+import com.charleskorn.kaml.YamlConfiguration
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import java.io.File
@@ -23,7 +25,7 @@ data class ProjectsFile(
         fun fromFile(path: String): ProjectsFile {
             val data = File(path).readText()
             return if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-                Yaml.default.decodeFromString(data)
+                yaml.decodeFromString(data)
             } else if (path.endsWith(".json")) {
                 json.decodeFromString(data)
             } else {
