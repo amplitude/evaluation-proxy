@@ -2,6 +2,7 @@ package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
 import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.util.Redis
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
@@ -23,12 +24,16 @@ internal interface DeploymentStorage {
 
 internal fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
     val uri = redisConfiguration?.uri
-    val readOnlyUri = redisConfiguration?.readOnlyUri ?: uri
-    val prefix = redisConfiguration?.prefix
-    return if (uri == null || readOnlyUri == null || prefix == null) {
+    return if (uri == null) {
         InMemoryDeploymentStorage()
     } else {
-        RedisDeploymentStorage(uri, readOnlyUri, prefix, projectId)
+        val redis = RedisConnection(uri)
+        val readOnlyRedis = if (redisConfiguration.readOnlyUri != null) {
+            RedisConnection(redisConfiguration.readOnlyUri)
+        } else {
+            redis
+        }
+        RedisDeploymentStorage(projectId, redisConfiguration.prefix, redis, readOnlyRedis)
     }
 }
 
@@ -93,42 +98,39 @@ internal class InMemoryDeploymentStorage : DeploymentStorage {
 }
 
 internal class RedisDeploymentStorage(
-    uri: String,
-    readOnlyUri: String,
-    prefix: String,
-    private val projectId: String
+    private val prefix: String,
+    private val projectId: String,
+    private val redis: Redis,
+    private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
 
-    private val redis = RedisConnection(uri, prefix)
-    private val readOnlyRedis = RedisConnection(readOnlyUri, prefix)
-
     override suspend fun getDeployments(): Set<String> {
-        return redis.smembers(RedisKey.Deployments(projectId)) ?: emptySet()
+        return redis.smembers(RedisKey.Deployments(prefix, projectId)) ?: emptySet()
     }
 
     override suspend fun putDeployment(deploymentKey: String) {
-        redis.sadd(RedisKey.Deployments(projectId), setOf(deploymentKey))
+        redis.sadd(RedisKey.Deployments(prefix, projectId), setOf(deploymentKey))
     }
 
     override suspend fun removeDeploymentInternal(deploymentKey: String) {
-        redis.srem(RedisKey.Deployments(projectId), deploymentKey)
+        redis.srem(RedisKey.Deployments(prefix, projectId), deploymentKey)
     }
 
     override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {
-        val flagJson = redis.hget(RedisKey.FlagConfigs(projectId, deploymentKey), flagKey) ?: return null
+        val flagJson = redis.hget(RedisKey.FlagConfigs(prefix, projectId, deploymentKey), flagKey) ?: return null
         return json.decodeFromString(flagJson)
     }
 
     // TODO Add in memory caching w/ invalidation
     override suspend fun getAllFlags(deploymentKey: String): Map<String, EvaluationFlag> {
         // High volume, use read only redis
-        return readOnlyRedis.hgetall(RedisKey.FlagConfigs(projectId, deploymentKey))
+        return readOnlyRedis.hgetall(RedisKey.FlagConfigs(prefix, projectId, deploymentKey))
             ?.mapValues { json.decodeFromString(it.value) } ?: mapOf()
     }
 
     override suspend fun putFlag(deploymentKey: String, flag: EvaluationFlag) {
         val flagJson = json.encodeToString(flag)
-        redis.hset(RedisKey.FlagConfigs(projectId, deploymentKey), mapOf(flag.key to flagJson))
+        redis.hset(RedisKey.FlagConfigs(prefix, projectId, deploymentKey), mapOf(flag.key to flagJson))
     }
 
     override suspend fun putAllFlags(deploymentKey: String, flags: List<EvaluationFlag>) {
@@ -138,12 +140,12 @@ internal class RedisDeploymentStorage(
     }
 
     override suspend fun removeFlag(deploymentKey: String, flagKey: String) {
-        redis.hdel(RedisKey.FlagConfigs(projectId, deploymentKey), flagKey)
+        redis.hdel(RedisKey.FlagConfigs(prefix, projectId, deploymentKey), flagKey)
     }
 
     override suspend fun removeAllFlags(deploymentKey: String) {
-        val redisKey = RedisKey.FlagConfigs(projectId, deploymentKey)
-        val flags = redis.hgetall(RedisKey.FlagConfigs(projectId, deploymentKey)) ?: return
+        val redisKey = RedisKey.FlagConfigs(prefix, projectId, deploymentKey)
+        val flags = redis.hgetall(RedisKey.FlagConfigs(prefix, projectId, deploymentKey)) ?: return
         for (key in flags.keys) {
             redis.hdel(redisKey, key)
         }

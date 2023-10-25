@@ -18,11 +18,10 @@ internal interface ProjectStorage {
 
 internal fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
     val uri = redisConfiguration?.uri
-    val prefix = redisConfiguration?.prefix
-    return if (uri == null || prefix == null) {
+    return if (uri == null) {
         InMemoryProjectStorage()
     } else {
-        RedisProjectStorage(uri, prefix)
+        RedisProjectStorage(redisConfiguration.prefix, RedisConnection(uri))
     }
 }
 
@@ -52,11 +51,9 @@ internal class InMemoryProjectStorage : ProjectStorage {
 }
 
 internal class RedisProjectStorage(
-    uri: String,
-    prefix: String
+    private val prefix: String,
+    private val redis: RedisConnection,
 ) : ProjectStorage {
-
-    private val redis = RedisConnection(uri, prefix)
 
     override val projects = MutableSharedFlow<Set<String>>(
         extraBufferCapacity = 1,
@@ -64,16 +61,16 @@ internal class RedisProjectStorage(
     )
 
     override suspend fun getProjects(): Set<String> {
-        return redis.smembers(RedisKey.Projects) ?: emptySet()
+        return redis.smembers(RedisKey.Projects(prefix)) ?: emptySet()
     }
 
     override suspend fun putProject(projectId: String) {
-        redis.sadd(RedisKey.Projects, setOf(projectId))
+        redis.sadd(RedisKey.Projects(prefix), setOf(projectId))
         projects.emit(getProjects())
     }
 
     override suspend fun removeProject(projectId: String) {
-        redis.srem(RedisKey.Projects, projectId)
+        redis.srem(RedisKey.Projects(prefix), projectId)
         projects.emit(getProjects())
     }
 }
