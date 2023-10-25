@@ -9,14 +9,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-interface ProjectStorage {
+internal interface ProjectStorage {
     val projects: Flow<Set<String>>
     suspend fun getProjects(): Set<String>
     suspend fun putProject(projectId: String)
     suspend fun removeProject(projectId: String)
 }
 
-fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
+internal fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
     val uri = redisConfiguration?.uri
     val prefix = redisConfiguration?.prefix
     return if (uri == null || prefix == null) {
@@ -26,7 +26,7 @@ fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
     }
 }
 
-class InMemoryProjectStorage : ProjectStorage {
+internal class InMemoryProjectStorage : ProjectStorage {
 
     override val projects = MutableSharedFlow<Set<String>>(
         extraBufferCapacity = 1,
@@ -51,7 +51,7 @@ class InMemoryProjectStorage : ProjectStorage {
     }
 }
 
-class RedisProjectStorage(
+internal class RedisProjectStorage(
     uri: String,
     prefix: String
 ) : ProjectStorage {

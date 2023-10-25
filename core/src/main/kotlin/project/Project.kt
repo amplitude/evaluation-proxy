@@ -1,6 +1,6 @@
 package com.amplitude.project
 
-data class Project(
+internal data class Project(
     val id: String,
     val apiKey: String,
     val secretKey: String,

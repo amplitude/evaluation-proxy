@@ -7,7 +7,7 @@ import java.util.HashMap
 /**
  * Least recently used (LRU) cache with TTL for cache entries.
  */
-class Cache<K, V>(
+internal class Cache<K, V>(
     private val capacity: Int,
     private val ttlMillis: Long = 0
 ) {

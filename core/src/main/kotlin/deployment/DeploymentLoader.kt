@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class DeploymentLoader(
+internal class DeploymentLoader(
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     private val cohortLoader: CohortLoader

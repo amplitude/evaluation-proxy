@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 
-interface DeploymentStorage {
+internal interface DeploymentStorage {
     suspend fun getDeployments(): Set<String>
     suspend fun putDeployment(deploymentKey: String)
     suspend fun removeDeploymentInternal(deploymentKey: String)
@@ -21,7 +21,7 @@ interface DeploymentStorage {
     suspend fun removeAllFlags(deploymentKey: String)
 }
 
-fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
+internal fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfiguration?): DeploymentStorage {
     val uri = redisConfiguration?.uri
     val readOnlyUri = redisConfiguration?.readOnlyUri ?: uri
     val prefix = redisConfiguration?.prefix
@@ -32,7 +32,7 @@ fun getDeploymentStorage(projectId: String, redisConfiguration: RedisConfigurati
     }
 }
 
-class InMemoryDeploymentStorage : DeploymentStorage {
+internal class InMemoryDeploymentStorage : DeploymentStorage {
 
     private val lock = Mutex()
     private val deploymentStorage = mutableMapOf<String, MutableMap<String, EvaluationFlag>?>()
@@ -92,7 +92,7 @@ class InMemoryDeploymentStorage : DeploymentStorage {
     }
 }
 
-class RedisDeploymentStorage(
+internal class RedisDeploymentStorage(
     uri: String,
     readOnlyUri: String,
     prefix: String,

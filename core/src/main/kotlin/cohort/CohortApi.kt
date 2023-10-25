@@ -23,18 +23,6 @@ import java.util.Base64
 
 @Serializable
 private data class SerialCohortDescription(
-    @SerialName("lastComputed") val lastComputed: Long,
-    @SerialName("published") val published: Boolean,
-    @SerialName("archived") val archived: Boolean,
-    @SerialName("appId") val appId: Int,
-    @SerialName("lastMod") val lastMod: Long,
-    @SerialName("type") val type: String,
-    @SerialName("id") val id: String,
-    @SerialName("size") val size: Int
-)
-
-@Serializable
-private data class SerialSingleCohortDescription(
     @SerialName("cohort_id") val cohortId: String,
     @SerialName("app_id") val appId: Int = 0,
     @SerialName("org_id") val orgId: Int = 0,
@@ -45,19 +33,18 @@ private data class SerialSingleCohortDescription(
 )
 
 @Serializable
-data class GetCohortAsyncResponse(
+private data class GetCohortAsyncResponse(
     @SerialName("cohort_id") val cohortId: String,
     @SerialName("request_id") val requestId: String
 )
 
-interface CohortApi {
-
+internal interface CohortApi {
     suspend fun getCohortDescription(cohortId: String): CohortDescription
     suspend fun getCohortDescriptions(cohortIds: Set<String>): List<CohortDescription>
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>
 }
 
-class CohortApiV5(
+internal class CohortApiV5(
     private val serverUrl: String,
     apiKey: String,
     secretKey: String
@@ -80,7 +67,7 @@ class CohortApiV5(
                 headers { set("Authorization", "Basic $basicAuth") }
             }
         }
-        val serialDescription = json.decodeFromString<SerialSingleCohortDescription>(response.body())
+        val serialDescription = json.decodeFromString<SerialCohortDescription>(response.body())
         return CohortDescription(
             id = serialDescription.cohortId,
             lastComputed = serialDescription.lastComputed,

@@ -53,7 +53,7 @@ internal suspend fun retry(
     throw error!!
 }
 
-suspend fun HttpClient.get(
+internal suspend fun HttpClient.get(
     url: String,
     path: String,
     block: HttpRequestBuilder.() -> Unit
@@ -61,7 +61,7 @@ suspend fun HttpClient.get(
     return request(HttpMethod.Get, url, path, block)
 }
 
-suspend fun HttpClient.request(
+internal suspend fun HttpClient.request(
     method: HttpMethod,
     url: String,
     path: String,

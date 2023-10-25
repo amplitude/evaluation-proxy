@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlin.time.Duration
 
-interface CohortStorage {
+internal interface CohortStorage {
     suspend fun getCohortDescription(cohortId: String): CohortDescription?
     suspend fun getCohortDescriptions(): Map<String, CohortDescription>
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>?
@@ -18,7 +18,7 @@ interface CohortStorage {
     suspend fun removeCohort(cohortDescription: CohortDescription)
 }
 
-fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?, ttl: Duration): CohortStorage {
+internal fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?, ttl: Duration): CohortStorage {
     val uri = redisConfiguration?.uri
     val readOnlyUri = redisConfiguration?.readOnlyUri ?: uri
     val prefix = redisConfiguration?.prefix
@@ -29,7 +29,7 @@ fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?,
     }
 }
 
-class InMemoryCohortStorage : CohortStorage {
+internal class InMemoryCohortStorage : CohortStorage {
 
     private class Cohort(
         val description: CohortDescription,
@@ -71,7 +71,7 @@ class InMemoryCohortStorage : CohortStorage {
     }
 }
 
-class RedisCohortStorage(
+internal class RedisCohortStorage(
     uri: String,
     readOnlyUri: String,
     prefix: String,

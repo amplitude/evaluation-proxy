@@ -5,7 +5,7 @@ import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.experiment.evaluation.EvaluationOperator
 import com.amplitude.experiment.evaluation.EvaluationSegment
 
-fun Collection<EvaluationFlag>.getCohortIds(): Set<String> {
+internal fun Collection<EvaluationFlag>.getCohortIds(): Set<String> {
     val cohortIds = mutableSetOf<String>()
     for (flag in this) {
         cohortIds += flag.getCohortIds()
@@ -13,7 +13,7 @@ fun Collection<EvaluationFlag>.getCohortIds(): Set<String> {
     return cohortIds
 }
 
-fun EvaluationFlag.getCohortIds(): Set<String> {
+internal fun EvaluationFlag.getCohortIds(): Set<String> {
     val cohortIds = mutableSetOf<String>()
     for (segment in this.segments) {
         cohortIds += segment.getCohortConditionIds()

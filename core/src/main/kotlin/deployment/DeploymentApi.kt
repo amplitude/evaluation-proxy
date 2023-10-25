@@ -12,11 +12,11 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 
-interface DeploymentApi {
+internal interface DeploymentApi {
     suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag>
 }
 
-class DeploymentApiV1(
+internal class DeploymentApiV1(
     private val serverUrl: String
 ) : DeploymentApi {
 

@@ -10,7 +10,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class DeploymentRunner(
+internal class DeploymentRunner(
     @Volatile var configuration: Configuration,
     private val deploymentKey: String,
     private val deploymentApi: DeploymentApi,

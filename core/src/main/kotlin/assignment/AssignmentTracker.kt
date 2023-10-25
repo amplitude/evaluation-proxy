@@ -7,7 +7,7 @@ import com.amplitude.util.deviceId
 import com.amplitude.util.userId
 import org.json.JSONObject
 
-object FlagType {
+private object FlagType {
     const val RELEASE = "release"
     const val EXPERIMENT = "experiment"
     const val MUTUAL_EXCLUSION_GROUP = "mutual-exclusion-group"
@@ -15,11 +15,11 @@ object FlagType {
     const val RELEASE_GROUP = "release-group"
 }
 
-interface AssignmentTracker {
+internal interface AssignmentTracker {
     suspend fun track(assignment: Assignment)
 }
 
-class AmplitudeAssignmentTracker(
+internal class AmplitudeAssignmentTracker(
     private val amplitude: Amplitude,
     private val assignmentFilter: AssignmentFilter
 ) : AssignmentTracker {
