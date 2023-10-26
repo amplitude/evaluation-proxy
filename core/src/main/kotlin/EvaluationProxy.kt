@@ -35,11 +35,16 @@ class HttpErrorResponseException(
 
 class EvaluationProxy(
     private val projectConfigurations: List<ProjectConfiguration>,
-    private val configuration: Configuration = Configuration()
+    private val configuration: Configuration = Configuration(),
+    metricsHandler: MetricsHandler? = null
 ) {
 
     companion object {
         val log by logger()
+    }
+
+    init {
+        Metrics.handler = metricsHandler
     }
 
     private val supervisor = SupervisorJob()
@@ -189,7 +194,9 @@ class EvaluationProxy(
         flagKeys: Set<String>? = null
     ): Map<String, EvaluationVariant> {
         val projectProxy = getProjectProxy(deploymentKey)
-        return projectProxy.evaluate(deploymentKey, user, flagKeys)
+        return Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
+            projectProxy.evaluate(deploymentKey, user, flagKeys)
+        }
     }
 
     suspend fun evaluateV1(
@@ -198,7 +205,9 @@ class EvaluationProxy(
         flagKeys: Set<String>? = null
     ): Map<String, EvaluationVariant> {
         val projectProxy = getProjectProxy(deploymentKey)
-        return projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+        return Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
+            projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+        }
     }
 
     // Private

@@ -1,5 +1,10 @@
 package com.amplitude.cohort
 
+import com.amplitude.CohortDescriptionFetch
+import com.amplitude.CohortDescriptionFetchFailure
+import com.amplitude.CohortDownload
+import com.amplitude.CohortDownloadFailure
+import com.amplitude.Metrics
 import com.amplitude.util.logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -30,7 +35,12 @@ internal class CohortLoader(
 
     private suspend fun loadCohort(cohortId: String) = coroutineScope {
         log.trace("loadCohort: start - cohortId={}", cohortId)
-        val networkCohort = cohortApi.getCohortDescription(cohortId)
+        val networkCohort = Metrics.with(
+            { CohortDescriptionFetch },
+            { e -> CohortDescriptionFetchFailure(e) }
+        ) {
+            cohortApi.getCohortDescription(cohortId)
+        }
         val storageCohort = cohortStorage.getCohortDescription(cohortId)
         val shouldDownloadCohort = networkCohort.size <= maxCohortSize &&
             networkCohort.lastComputed > (storageCohort?.lastComputed ?: -1)
@@ -39,7 +49,9 @@ internal class CohortLoader(
                 jobs.getOrPut(cohortId) {
                     launch {
                         log.info("Downloading cohort. $networkCohort")
-                        val cohortMembers = cohortApi.getCohortMembers(networkCohort)
+                        val cohortMembers = Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
+                            cohortApi.getCohortMembers(networkCohort)
+                        }
                         cohortStorage.putCohort(networkCohort, cohortMembers)
                         jobsMutex.withLock { jobs.remove(cohortId) }
                         log.info("Cohort download complete. $networkCohort")

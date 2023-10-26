@@ -1,5 +1,8 @@
 package com.amplitude.util
 
+import com.amplitude.Metrics
+import com.amplitude.RedisCommand
+import com.amplitude.RedisCommandFailure
 import com.amplitude.cohort.CohortDescription
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisFuture
@@ -139,8 +142,10 @@ internal class RedisConnection(
     }
 
     private suspend inline fun <reified R> Deferred<StatefulRedisConnection<String, String>>.run(
-        action: RedisAsyncCommands<String, String>.() -> RedisFuture<R>
+        crossinline action: RedisAsyncCommands<String, String>.() -> RedisFuture<R>
     ): R {
-        return await().async().action().asDeferred().await()
+        return Metrics.with({ RedisCommand }, { e -> RedisCommandFailure(e) }) {
+            await().async().action().asDeferred().await()
+        }
     }
 }

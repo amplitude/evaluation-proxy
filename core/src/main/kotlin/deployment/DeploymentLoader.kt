@@ -1,5 +1,8 @@
 package com.amplitude.deployment
 
+import com.amplitude.FlagsFetch
+import com.amplitude.FlagsFetchFailure
+import com.amplitude.Metrics
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.util.getCohortIds
 import com.amplitude.util.logger
@@ -27,7 +30,9 @@ internal class DeploymentLoader(
         jobsMutex.withLock {
             jobs.getOrPut(deploymentKey) {
                 launch {
-                    val networkFlags = deploymentApi.getFlagConfigs(deploymentKey)
+                    val networkFlags = Metrics.with({ FlagsFetch }, { e -> FlagsFetchFailure(e) }) {
+                        deploymentApi.getFlagConfigs(deploymentKey)
+                    }
                     for (flag in networkFlags) {
                         val cohortIds = flag.getCohortIds()
                         if (cohortIds.isNotEmpty()) {

@@ -2,7 +2,12 @@ package com.amplitude.assignment
 
 import com.amplitude.Amplitude
 import com.amplitude.AssignmentConfiguration
+import com.amplitude.AssignmentEvent
+import com.amplitude.AssignmentEventFilter
+import com.amplitude.AssignmentEventSend
+import com.amplitude.AssignmentEventSendFailure
 import com.amplitude.Event
+import com.amplitude.Metrics
 import com.amplitude.util.deviceId
 import com.amplitude.util.userId
 import org.json.JSONObject
@@ -38,8 +43,13 @@ internal class AmplitudeAssignmentTracker(
     )
 
     override suspend fun track(assignment: Assignment) {
+        Metrics.track(AssignmentEvent)
         if (assignmentFilter.shouldTrack(assignment)) {
-            amplitude.logEvent(assignment.toAmplitudeEvent())
+            Metrics.with({ AssignmentEventSend }, { e -> AssignmentEventSendFailure(e) }) {
+                amplitude.logEvent(assignment.toAmplitudeEvent())
+            }
+        } else {
+            Metrics.track(AssignmentEventFilter)
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.amplitude.project
 
+import com.amplitude.DeploymentsFetch
+import com.amplitude.DeploymentsFetchFailure
+import com.amplitude.Metrics
 import com.amplitude.deployment.Deployment
 import com.amplitude.util.get
 import com.amplitude.util.json
@@ -48,19 +51,21 @@ internal class ProjectApiV1(private val managementKey: String): ProjectApi {
             socketTimeoutMillis = 30000
         }
     }
-    override suspend fun getDeployments(): List<Deployment> {
-        log.trace("getDeployments: start")
-        val response = retry(onFailure = { e -> log.error("Get deployments failed: $e") }) {
-            client.get(MANAGEMENT_SERVER_URL, "/api/1/deployments") {
-                headers {
-                    set("Authorization", "Bearer $managementKey")
-                    set("Accept", "application/json")
+
+    override suspend fun getDeployments(): List<Deployment> =
+        Metrics.with({ DeploymentsFetch }, { e -> DeploymentsFetchFailure(e) }) {
+            log.trace("getDeployments: start")
+            val response = retry(onFailure = { e -> log.error("Get deployments failed: $e") }) {
+                client.get(MANAGEMENT_SERVER_URL, "/api/1/deployments") {
+                    headers {
+                        set("Authorization", "Bearer $managementKey")
+                        set("Accept", "application/json")
+                    }
                 }
             }
+            json.decodeFromString<DeploymentsResponse>(response.body())
+                .deployments
+                .mapNotNull { it.toDeployment() }
+                .also { log.trace("getDeployments: end") }
         }
-        return json.decodeFromString<DeploymentsResponse>(response.body())
-            .deployments
-            .mapNotNull { it.toDeployment() }
-            .also { log.trace("getDeployments: end") }
-    }
 }
