@@ -33,6 +33,15 @@ internal class DeploymentLoader(
                     val networkFlags = Metrics.with({ FlagsFetch }, { e -> FlagsFetchFailure(e) }) {
                         deploymentApi.getFlagConfigs(deploymentKey)
                     }
+                    // Remove flags that are no longer deployed.
+                    val networkFlagKeys = networkFlags.map { it.key }.toSet()
+                    val storageFlagKeys = deploymentStorage.getAllFlags(deploymentKey).map { it.key }.toSet()
+                    for (flagToRemove in storageFlagKeys - networkFlagKeys) {
+                        log.debug("Removing flag: $flagToRemove")
+                        deploymentStorage.removeFlag(deploymentKey, flagToRemove)
+                    }
+                    // Load cohorts for each flag independently then put the
+                    // flag into storage.
                     for (flag in networkFlags) {
                         val cohortIds = flag.getCohortIds()
                         if (cohortIds.isNotEmpty()) {
@@ -44,6 +53,8 @@ internal class DeploymentLoader(
                             deploymentStorage.putFlag(deploymentKey, flag)
                         }
                     }
+                    // Remove the job
+                    jobsMutex.withLock { jobs.remove(deploymentKey) }
                 }
             }
         }.join()

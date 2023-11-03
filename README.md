@@ -18,12 +18,9 @@ The default location for the configuration yaml file is `/etc/evaluation-proxy-c
 
 ```yaml
 projects:
-  - id: "YOUR PROJECT ID"
-    apiKey: "YOUR API KEY"
-    secretKey: " YOUR SECRET KEY"
-    deploymentKeys:
-      - "YOUR DEPLOYMENT KEY 1"
-      - "YOUR DEPLOYMENT KEY 2"
+  - apiKey: "YOUR API KEY"
+    secretKey: "YOUR SECRET KEY"
+    managementKey: "YOUR MANAGEMENT API KEY"
 
 configuration:
   redis:
@@ -43,7 +40,7 @@ Use the evaluation proxy [Helm chart](https://github.com/amplitude/evaluation-pr
 
 ### Docker Compose Example
 
-Run the container locally with redis persistence using `docker compose`. You must first update the `compose-config.yaml` file with your project and deployment keys before running the composition.
+Run the container locally with redis persistence using `docker compose`. You must first update the `compose-config.yaml` file with your project keys before running the composition.
 
 ```
 docker compose build

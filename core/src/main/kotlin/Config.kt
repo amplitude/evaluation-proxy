@@ -49,7 +49,7 @@ data class ConfigurationFile(
         fun fromFile(path: String): ConfigurationFile {
             val data = File(path).readText()
             return if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-                Yaml.default.decodeFromString(data)
+                yaml.decodeFromString(data)
             } else if (path.endsWith(".json")) {
                 json.decodeFromString(data)
             } else {
