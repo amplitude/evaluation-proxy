@@ -27,7 +27,7 @@ class AssignmentServiceTest {
                 metadata = mapOf(
                     "default" to true,
                     "version" to 1,
-                    "segmentName" to "All Other Users",
+                    "segmentName" to "All Other Users"
                 )
             )
         )

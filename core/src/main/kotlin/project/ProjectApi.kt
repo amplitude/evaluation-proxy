@@ -17,18 +17,18 @@ import kotlinx.serialization.Serializable
 
 private const val MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
 
-
 @Serializable
 private data class DeploymentsResponse(
     val deployments: List<SerialDeployment>
 )
+
 @Serializable
 internal data class SerialDeployment(
     val id: String,
     val projectId: String,
     val label: String,
     val key: String,
-    val deleted: Boolean,
+    val deleted: Boolean
 )
 
 private fun SerialDeployment.toDeployment(): Deployment? {
@@ -40,7 +40,7 @@ internal interface ProjectApi {
     suspend fun getDeployments(): List<Deployment>
 }
 
-internal class ProjectApiV1(private val managementKey: String): ProjectApi {
+internal class ProjectApiV1(private val managementKey: String) : ProjectApi {
 
     companion object {
         val log by logger()

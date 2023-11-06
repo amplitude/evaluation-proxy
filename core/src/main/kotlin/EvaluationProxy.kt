@@ -78,7 +78,7 @@ class EvaluationProxy(
                 id = projectId,
                 apiKey = projectConfiguration.apiKey,
                 secretKey = projectConfiguration.secretKey,
-                managementKey = projectConfiguration.managementKey,
+                managementKey = projectConfiguration.managementKey
             )
             apiKeysToProject[project.apiKey] = project
             secretKeysToProject[project.secretKey] = project

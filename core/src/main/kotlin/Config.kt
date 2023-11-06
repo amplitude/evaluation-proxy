@@ -6,8 +6,6 @@ import com.amplitude.util.json
 import com.amplitude.util.longEnv
 import com.amplitude.util.stringEnv
 import com.amplitude.util.yaml
-import com.charleskorn.kaml.Yaml
-import com.charleskorn.kaml.YamlConfiguration
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import java.io.File
@@ -92,7 +90,7 @@ data class Configuration(
             port = intEnv(EnvKey.PORT, Default.PORT)!!,
             serverUrl = stringEnv(EnvKey.SERVER_URL, Default.SERVER_URL)!!,
             cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.COHORT_SERVER_URL)!!,
-            deploymentSyncIntervalMillis =  longEnv(
+            deploymentSyncIntervalMillis = longEnv(
                 EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
                 Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS
             )!!,

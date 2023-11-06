@@ -1,6 +1,5 @@
 package com.amplitude
 
-import io.ktor.server.application.Application
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.json
@@ -9,6 +8,7 @@ import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.createApplicationPlugin
@@ -18,7 +18,6 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.ApplicationRequest
-import io.ktor.server.request.header
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
@@ -83,7 +82,6 @@ fun main() {
 }
 
 fun Application.proxyServer() {
-
     runBlocking {
         evaluationProxy.start()
     }
@@ -112,7 +110,6 @@ fun Application.proxyServer() {
      * Configure endpoints.
      */
     routing {
-
         // Local Evaluation
 
         get("/sdk/v2/flags") {
@@ -290,14 +287,18 @@ private fun ApplicationRequest.getUserFromQuery(): JsonObject {
         JsonObject(emptyMap())
     }
     if (userId != null) {
-        user = JsonObject(user.toMutableMap().apply {
-            put("user_id", JsonPrimitive(userId))
-        })
+        user = JsonObject(
+            user.toMutableMap().apply {
+                put("user_id", JsonPrimitive(userId))
+            }
+        )
     }
     if (deviceId != null) {
-        user = JsonObject(user.toMutableMap().apply {
-            put("device_id", JsonPrimitive(userId))
-        })
+        user = JsonObject(
+            user.toMutableMap().apply {
+                put("device_id", JsonPrimitive(userId))
+            }
+        )
     }
     return user
 }

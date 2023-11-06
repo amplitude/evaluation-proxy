@@ -21,5 +21,3 @@ internal fun Assignment.canonicalize(): String {
     }
     return sb.toString()
 }
-
-

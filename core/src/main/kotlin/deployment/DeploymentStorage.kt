@@ -110,7 +110,7 @@ internal class RedisDeploymentStorage(
     private val prefix: String,
     private val projectId: String,
     private val redis: Redis,
-    private val readOnlyRedis: Redis,
+    private val readOnlyRedis: Redis
 ) : DeploymentStorage {
     override suspend fun getDeployment(deploymentKey: String): Deployment? {
         val deploymentJson = redis.hget(RedisKey.Deployments(prefix, projectId), deploymentKey) ?: return null
@@ -124,7 +124,7 @@ internal class RedisDeploymentStorage(
 
     override suspend fun putDeployment(deployment: Deployment) {
         val deploymentJson = json.encodeToString(deployment)
-        redis.hset(RedisKey.Deployments(prefix, projectId), mapOf(deployment.key to  deploymentJson))
+        redis.hset(RedisKey.Deployments(prefix, projectId), mapOf(deployment.key to deploymentJson))
     }
 
     override suspend fun removeDeployment(deploymentKey: String) {

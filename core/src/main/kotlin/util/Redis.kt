@@ -59,7 +59,7 @@ internal interface Redis {
 }
 
 internal class RedisConnection(
-    redisUri: String,
+    redisUri: String
 ) : Redis {
 
     private val connection: Deferred<StatefulRedisConnection<String, String>>

@@ -77,7 +77,7 @@ internal class CohortApiV5(
     override suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String> {
         log.debug("getCohortMembers: start - cohortDescription={}", cohortDescription)
         // Initiate async cohort download
-        val initialResponse = retry(onFailure = { e -> log.error("Cohort download request failed: $e")}) {
+        val initialResponse = retry(onFailure = { e -> log.error("Cohort download request failed: $e") }) {
             client.get(serverUrl, "/api/5/cohorts/request/${cohortDescription.id}") {
                 headers { set("Authorization", "Basic $basicAuth") }
                 parameter("lastComputed", cohortDescription.lastComputed)
@@ -87,7 +87,7 @@ internal class CohortApiV5(
         log.debug("getCohortMembers: poll for status - cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
         // Poll until the cohort is ready for download
         while (true) {
-            val statusResponse = retry(onFailure = { e -> log.error("Cohort request status failed: $e")}) {
+            val statusResponse = retry(onFailure = { e -> log.error("Cohort request status failed: $e") }) {
                 client.get(serverUrl, "/api/5/cohorts/request-status/${getCohortResponse.requestId}") {
                     headers { set("Authorization", "Basic $basicAuth") }
                 }
@@ -102,7 +102,7 @@ internal class CohortApiV5(
         }
         // Download the cohort
         log.debug("getCohortMembers: download cohort - cohortId=${cohortDescription.id}, requestId=${getCohortResponse.requestId}")
-        val downloadResponse = retry(onFailure = { e -> log.error("Cohort file download failed: $e")}) {
+        val downloadResponse = retry(onFailure = { e -> log.error("Cohort file download failed: $e") }) {
             client.get(serverUrl, "/api/5/cohorts/request/${getCohortResponse.requestId}/file") {
                 headers { set("Authorization", "Basic $basicAuth") }
             }

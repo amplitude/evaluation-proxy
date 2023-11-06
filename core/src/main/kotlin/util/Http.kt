@@ -12,7 +12,7 @@ import kotlinx.coroutines.delay
 
 internal class HttpErrorException(
     val statusCode: HttpStatusCode,
-    response: HttpResponse? = null,
+    response: HttpResponse? = null
 ) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}, response=$response")
 
 internal data class RetryConfig(

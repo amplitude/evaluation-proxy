@@ -38,7 +38,6 @@ internal fun MutableMap<String, Any?>?.toEvaluationContext(): EvaluationContext 
     return context
 }
 
-
 private fun Map<*, *>.select(vararg selector: Any?): Any? {
     var map: Map<*, *> = this
     var result: Any?

@@ -7,24 +7,24 @@ interface MetricsHandler {
     fun track(metric: Metric)
 }
 
-data object Evaluation: Metric()
-data class EvaluationFailure(val exception: Exception): FailureMetric()
-data object AssignmentEvent: Metric()
-data object AssignmentEventFilter: Metric()
-data object AssignmentEventSend: Metric()
-data class AssignmentEventSendFailure(val exception: Exception): FailureMetric()
-data object DeploymentsFetch: Metric()
-data class DeploymentsFetchFailure(val exception: Exception): FailureMetric()
-data object FlagsFetch: Metric()
-data class FlagsFetchFailure(val exception: Exception): FailureMetric()
-data object CohortDescriptionFetch: Metric()
-data class CohortDescriptionFetchFailure(val exception: Exception): FailureMetric()
-data object CohortDownload: Metric()
-data class CohortDownloadFailure(val exception: Exception): FailureMetric()
-data object RedisCommand: Metric()
-data class RedisCommandFailure(val exception: Exception): FailureMetric()
+data object Evaluation : Metric()
+data class EvaluationFailure(val exception: Exception) : FailureMetric()
+data object AssignmentEvent : Metric()
+data object AssignmentEventFilter : Metric()
+data object AssignmentEventSend : Metric()
+data class AssignmentEventSendFailure(val exception: Exception) : FailureMetric()
+data object DeploymentsFetch : Metric()
+data class DeploymentsFetchFailure(val exception: Exception) : FailureMetric()
+data object FlagsFetch : Metric()
+data class FlagsFetchFailure(val exception: Exception) : FailureMetric()
+data object CohortDescriptionFetch : Metric()
+data class CohortDescriptionFetchFailure(val exception: Exception) : FailureMetric()
+data object CohortDownload : Metric()
+data class CohortDownloadFailure(val exception: Exception) : FailureMetric()
+data object RedisCommand : Metric()
+data class RedisCommandFailure(val exception: Exception) : FailureMetric()
 
-internal object Metrics: MetricsHandler {
+internal object Metrics : MetricsHandler {
 
     internal var handler: MetricsHandler? = null
 

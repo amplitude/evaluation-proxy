@@ -52,7 +52,7 @@ internal class InMemoryProjectStorage : ProjectStorage {
 
 internal class RedisProjectStorage(
     private val prefix: String,
-    private val redis: RedisConnection,
+    private val redis: RedisConnection
 ) : ProjectStorage {
 
     override val projects = MutableSharedFlow<Set<String>>(

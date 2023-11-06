@@ -24,7 +24,7 @@ internal class ProjectProxy(
     configuration: Configuration,
     private val assignmentTracker: AssignmentTracker,
     private val deploymentStorage: DeploymentStorage,
-    private val cohortStorage: CohortStorage,
+    private val cohortStorage: CohortStorage
 ) {
 
     companion object {
@@ -114,7 +114,9 @@ internal class ProjectProxy(
             user.toMutableMap().apply {
                 put("cohort_ids", cohortStorage.getCohortMembershipsForUser(userId))
             }
-        } else null
+        } else {
+            null
+        }
         val evaluationContext = enrichedUser.toEvaluationContext()
         // Evaluate results
         log.debug("evaluate - context={}", evaluationContext)

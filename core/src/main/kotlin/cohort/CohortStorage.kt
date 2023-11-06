@@ -1,8 +1,6 @@
 package com.amplitude.cohort
 
 import com.amplitude.RedisConfiguration
-import com.amplitude.deployment.InMemoryDeploymentStorage
-import com.amplitude.deployment.RedisDeploymentStorage
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
@@ -82,7 +80,7 @@ internal class RedisCohortStorage(
     private val ttl: Duration,
     private val prefix: String,
     private val redis: RedisConnection,
-    private val readOnlyRedis: RedisConnection,
+    private val readOnlyRedis: RedisConnection
 ) : CohortStorage {
 
     override suspend fun getCohortDescription(cohortId: String): CohortDescription? {

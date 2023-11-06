@@ -95,7 +95,6 @@ internal class ProjectRunner(
         log.trace("refresh: end")
     }
 
-
     // Must be run within lock
     private suspend fun addDeploymentInternal(deploymentKey: String) {
         if (deploymentRunners.contains(deploymentKey)) {
