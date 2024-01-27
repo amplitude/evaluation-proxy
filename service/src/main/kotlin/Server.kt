@@ -159,6 +159,19 @@ fun Application.proxyServer() {
             call.respond(result)
         }
 
+        get("/sdk/v2/groups/{groupType}/{groupName}/cohorts") {
+            val deployment = this.call.request.getDeploymentKey()
+            val groupType = this.call.parameters["groupType"]
+            val groupName = this.call.parameters["groupName"]
+            val result = try {
+                evaluationProxy.getSerializedCohortMembershipsForGroup(deployment, groupType, groupName)
+            } catch (e: HttpErrorResponseException) {
+                call.respond(HttpStatusCode.fromValue(e.status), e.message)
+                return@get
+            }
+            call.respond(result)
+        }
+
         // Remote Evaluation V2 Endpoints
 
         get("/sdk/v2/vardata") {

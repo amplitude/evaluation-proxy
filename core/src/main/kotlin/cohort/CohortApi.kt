@@ -19,17 +19,19 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
+import java.lang.IllegalArgumentException
 import java.util.Base64
 
 @Serializable
-private data class SerialCohortDescription(
+private data class SerialCohortInfoResponse(
     @SerialName("cohort_id") val cohortId: String,
     @SerialName("app_id") val appId: Int = 0,
     @SerialName("org_id") val orgId: Int = 0,
     @SerialName("name") val name: String? = null,
     @SerialName("size") val size: Int = Int.MAX_VALUE,
     @SerialName("description") val description: String? = null,
-    @SerialName("last_computed") val lastComputed: Long = 0
+    @SerialName("last_computed") val lastComputed: Long = 0,
+    @SerialName("group_type") val groupType: String = USER_GROUP_TYPE,
 )
 
 @Serializable
@@ -66,11 +68,12 @@ internal class CohortApiV5(
                 headers { set("Authorization", "Basic $basicAuth") }
             }
         }
-        val serialDescription = json.decodeFromString<SerialCohortDescription>(response.body())
+        val serialDescription = json.decodeFromString<SerialCohortInfoResponse>(response.body())
         return CohortDescription(
             id = serialDescription.cohortId,
             lastComputed = serialDescription.lastComputed,
-            size = serialDescription.size
+            size = serialDescription.size,
+            groupType = serialDescription.groupType,
         )
     }
 
@@ -107,8 +110,24 @@ internal class CohortApiV5(
                 headers { set("Authorization", "Basic $basicAuth") }
             }
         }
+        // Parse the csv response
         val csv = CSVParser.parse(downloadResponse.bodyAsChannel().toInputStream(), Charsets.UTF_8, csvFormat)
-        return csv.map { it.get("user_id") }.filterNot { it.isNullOrEmpty() }.toSet()
-            .also { log.debug("getCohortMembers: end - cohortId=${cohortDescription.id}, resultSize=${it.size}") }
+        return if (cohortDescription.groupType == USER_GROUP_TYPE) {
+            csv.map { it.get("user_id") }.filterNot { it.isNullOrEmpty() }.toSet()
+        } else {
+            csv.map {
+                try {
+                    // CSV returned from API has all strings prefixed with a tab character
+                    it.get("\tgroup_value")
+                } catch (e: IllegalArgumentException) {
+                    it.get("group_value")
+                }
+            }.filterNot {
+                it.isNullOrEmpty()
+            }.map {
+                // CSV returned from API has all strings prefixed with a tab character
+                it.removePrefix("\t")
+            }.toSet()
+        }.also { log.debug("getCohortMembers: end - resultSize=${it.size}") }
     }
 }

@@ -2,7 +2,7 @@ package com.amplitude.deployment
 
 import com.amplitude.Configuration
 import com.amplitude.cohort.CohortLoader
-import com.amplitude.util.getCohortIds
+import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -40,7 +40,7 @@ internal class DeploymentRunner(
         scope.launch {
             while (true) {
                 delay(configuration.cohortSyncIntervalMillis)
-                val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getCohortIds()
+                val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getAllCohortIds()
                 cohortLoader.loadCohorts(cohortIds)
             }
         }

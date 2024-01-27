@@ -188,6 +188,11 @@ class EvaluationProxy(
         return projectProxy.getCohortMembershipsForUser(deploymentKey, userId)
     }
 
+    suspend fun getCohortMembershipsForGroup(deploymentKey: String?, groupType: String?, groupName: String?): Set<String> {
+        val projectProxy = getProjectProxy(deploymentKey)
+        return projectProxy.getCohortMembershipsForGroup(deploymentKey, groupType, groupName)
+    }
+
     suspend fun evaluate(
         deploymentKey: String?,
         user: Map<String, Any?>?,
@@ -233,6 +238,9 @@ suspend fun EvaluationProxy.getSerializedFlagConfigs(deploymentKey: String?): St
 
 suspend fun EvaluationProxy.getSerializedCohortMembershipsForUser(deploymentKey: String?, userId: String?): String =
     json.encodeToString(getCohortMembershipsForUser(deploymentKey, userId))
+
+suspend fun EvaluationProxy.getSerializedCohortMembershipsForGroup(deploymentKey: String?, groupType: String?, groupName: String?): String =
+    json.encodeToString(getCohortMembershipsForGroup(deploymentKey, groupType, groupName))
 
 suspend fun EvaluationProxy.serializedEvaluate(
     deploymentKey: String?,

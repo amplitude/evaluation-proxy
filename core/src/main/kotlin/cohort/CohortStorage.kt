@@ -14,6 +14,11 @@ internal interface CohortStorage {
     suspend fun getCohortDescriptions(): Map<String, CohortDescription>
     suspend fun getCohortMembers(cohortDescription: CohortDescription): Set<String>?
     suspend fun getCohortMembershipsForUser(userId: String, cohortIds: Set<String>? = null): Set<String>
+    suspend fun getCohortMembershipsForGroup(
+        groupType: String,
+        groupName: String,
+        cohortIds: Set<String>? = null
+    ): Set<String>
     suspend fun putCohort(description: CohortDescription, members: Set<String>)
     suspend fun removeCohort(cohortDescription: CohortDescription)
 }
@@ -73,6 +78,26 @@ internal class InMemoryCohortStorage : CohortStorage {
             }.toSet()
         }
     }
+
+    override suspend fun getCohortMembershipsForGroup(
+        groupType: String,
+        groupName: String,
+        cohortIds: Set<String>?
+    ): Set<String> {
+        return lock.withLock {
+            (cohortIds ?: cohorts.keys).mapNotNull { id ->
+                val cohort = cohorts[id]
+                if (cohort?.description?.groupType != groupType) {
+                    null
+                } else {
+                    when (cohort.members.contains(groupName)) {
+                        true -> id
+                        else -> null
+                    }
+                }
+            }.toSet()
+        }
+    }
 }
 
 internal class RedisCohortStorage(
@@ -101,8 +126,34 @@ internal class RedisCohortStorage(
         val descriptions = getCohortDescriptions()
         val memberships = mutableSetOf<String>()
         for (description in descriptions.values) {
+            if (cohortIds != null && !cohortIds.contains(description.id)) {
+                continue
+            }
             // High volume, use read connection
             val isMember = readOnlyRedis.sismember(RedisKey.CohortMembers(prefix, projectId, description), userId)
+            if (isMember) {
+                memberships += description.id
+            }
+        }
+        return memberships
+    }
+
+    override suspend fun getCohortMembershipsForGroup(
+        groupType: String,
+        groupName: String,
+        cohortIds: Set<String>?
+    ): Set<String> {
+        val descriptions = getCohortDescriptions()
+        val memberships = mutableSetOf<String>()
+        for (description in descriptions.values) {
+            if (cohortIds != null && !cohortIds.contains(description.id)) {
+                continue
+            }
+            if (description.groupType != groupType) {
+                continue
+            }
+            // High volume, use read connection
+            val isMember = readOnlyRedis.sismember(RedisKey.CohortMembers(prefix, projectId, description), groupName)
             if (isMember) {
                 memberships += description.id
             }

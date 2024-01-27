@@ -9,6 +9,7 @@ import com.amplitude.AssignmentEventSendFailure
 import com.amplitude.Event
 import com.amplitude.Metrics
 import com.amplitude.util.deviceId
+import com.amplitude.util.groups
 import com.amplitude.util.userId
 import org.json.JSONObject
 
@@ -60,6 +61,10 @@ internal fun Assignment.toAmplitudeEvent(): Event {
         this.context.userId(),
         this.context.deviceId()
     )
+    val groups = this.context.groups()
+    if (!groups.isNullOrEmpty()) {
+        event.groups = JSONObject(groups)
+    }
     event.eventProperties = JSONObject().apply {
         for ((flagKey, variant) in this@toAmplitudeEvent.results) {
             val version = variant.metadata?.get("version")

@@ -4,7 +4,7 @@ import com.amplitude.FlagsFetch
 import com.amplitude.FlagsFetchFailure
 import com.amplitude.Metrics
 import com.amplitude.cohort.CohortLoader
-import com.amplitude.util.getCohortIds
+import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -43,7 +43,7 @@ internal class DeploymentLoader(
                     // Load cohorts for each flag independently then put the
                     // flag into storage.
                     for (flag in networkFlags) {
-                        val cohortIds = flag.getCohortIds()
+                        val cohortIds = flag.getAllCohortIds()
                         if (cohortIds.isNotEmpty()) {
                             launch {
                                 cohortLoader.loadCohorts(cohortIds)

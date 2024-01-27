@@ -8,7 +8,7 @@ import com.amplitude.deployment.DeploymentApi
 import com.amplitude.deployment.DeploymentRunner
 import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationFlag
-import com.amplitude.util.getCohortIds
+import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -123,7 +123,7 @@ internal class ProjectRunner(
         for (deploymentKey in deploymentKeys) {
             allFlagConfigs += deploymentStorage.getAllFlags(deploymentKey).values
         }
-        val allTargetedCohortIds = allFlagConfigs.getCohortIds()
+        val allTargetedCohortIds = allFlagConfigs.getAllCohortIds()
         val allStoredCohortDescriptions = cohortStorage.getCohortDescriptions().values
         for (cohortDescription in allStoredCohortDescriptions) {
             if (!allTargetedCohortIds.contains(cohortDescription.id)) {

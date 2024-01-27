@@ -7,13 +7,14 @@ import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.CohortApiV5
 import com.amplitude.cohort.CohortDescription
 import com.amplitude.cohort.CohortStorage
+import com.amplitude.cohort.USER_GROUP_TYPE
 import com.amplitude.deployment.DeploymentApiV1
 import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
 import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.experiment.evaluation.topologicalSort
-import com.amplitude.util.getCohortIds
+import com.amplitude.util.getGroupedCohortIds
 import com.amplitude.util.logger
 import com.amplitude.util.toEvaluationContext
 import kotlinx.coroutines.coroutineScope
@@ -87,9 +88,30 @@ internal class ProjectProxy(
         if (userId.isNullOrEmpty()) {
             throw HttpErrorResponseException(status = 400, message = "Invalid user ID.")
         }
-        val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getCohortIds()
+        val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getGroupedCohortIds()[USER_GROUP_TYPE]
+        if (cohortIds.isNullOrEmpty()) {
+            return setOf()
+        }
         return cohortStorage.getCohortMembershipsForUser(userId, cohortIds)
     }
+
+    suspend fun getCohortMembershipsForGroup(deploymentKey: String?, groupType: String?, groupName: String?): Set<String> {
+        if (deploymentKey.isNullOrEmpty()) {
+            throw HttpErrorResponseException(status = 401, message = "Invalid deployment.")
+        }
+        if (groupType.isNullOrEmpty()) {
+            throw HttpErrorResponseException(status = 400, message = "Invalid group type.")
+        }
+        if (groupName.isNullOrEmpty()) {
+            throw HttpErrorResponseException(status = 400, message = "Invalid group name.")
+        }
+        val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getGroupedCohortIds()[groupType]
+        if (cohortIds.isNullOrEmpty()) {
+            return setOf()
+        }
+        return cohortStorage.getCohortMembershipsForGroup(groupType, groupName, cohortIds)
+    }
+
 
     suspend fun evaluate(
         deploymentKey: String?,
@@ -110,18 +132,32 @@ internal class ProjectProxy(
         }
         // Enrich user with cohort IDs and build the evaluation context
         val userId = user?.get("user_id") as? String
-        val enrichedUser = if (userId != null) {
-            user.toMutableMap().apply {
-                put("cohort_ids", cohortStorage.getCohortMembershipsForUser(userId))
+        val enrichedUser = user?.toMutableMap() ?: mutableMapOf()
+        if (userId != null) {
+            enrichedUser["cohort_ids"] = cohortStorage.getCohortMembershipsForUser(userId)
+        }
+        val groups = enrichedUser["groups"] as? Map<*, *>
+        if (!groups.isNullOrEmpty()) {
+            val groupCohortIds = mutableMapOf<String, Map<String, Set<String>>>()
+            for (entry in groups.entries) {
+                val groupType = entry.key as? String
+                val groupName = (entry.value as? Collection<*>)?.firstOrNull() as? String
+                if (groupType != null && groupName != null) {
+                    val cohortIds = cohortStorage.getCohortMembershipsForGroup(groupType, groupName)
+                    if (groupCohortIds.isNotEmpty()) {
+                        groupCohortIds.putIfAbsent(groupType, mutableMapOf(groupName to cohortIds))
+                    }
+                }
             }
-        } else {
-            null
+            if (groupCohortIds.isNotEmpty()) {
+                enrichedUser["group_cohort_ids"] = groupCohortIds
+            }
         }
         val evaluationContext = enrichedUser.toEvaluationContext()
         // Evaluate results
         log.debug("evaluate - context={}", evaluationContext)
         val result = engine.evaluate(evaluationContext, flags)
-        if (enrichedUser != null) {
+        if (enrichedUser.isNotEmpty()) {
             coroutineScope {
                 launch {
                     assignmentTracker.track(Assignment(evaluationContext, result))

@@ -40,7 +40,7 @@ internal sealed class RedisKey(val value: String) {
         val prefix: String,
         val projectId: String,
         val cohortDescription: CohortDescription
-    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:${cohortDescription.id}:users:${cohortDescription.lastComputed}")
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:${cohortDescription.id}:${cohortDescription.groupType}:${cohortDescription.lastComputed}")
 }
 
 internal interface Redis {

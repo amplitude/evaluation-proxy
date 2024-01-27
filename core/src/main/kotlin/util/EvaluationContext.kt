@@ -9,9 +9,13 @@ internal fun EvaluationContext.deviceId(): String? {
     return (this["user"] as? Map<*, *>)?.get("device_id") as? String
 }
 
+internal fun EvaluationContext.groups(): Map<*, *>? {
+    return this["groups"] as? Map<*, *>
+}
+
 internal fun MutableMap<String, Any?>?.toEvaluationContext(): EvaluationContext {
     val context = EvaluationContext()
-    if (this == null) {
+    if (this.isNullOrEmpty()) {
         return context
     }
     val groups = mutableMapOf<String, Map<String, Any>>()
@@ -26,6 +30,10 @@ internal fun MutableMap<String, Any?>?.toEvaluationContext(): EvaluationContext 
                 val groupProperties = this.select("group_properties", groupType, groupName) as? Map<*, *>
                 if (!groupProperties.isNullOrEmpty()) {
                     groupNameMap["group_properties"] = groupProperties
+                }
+                val groupCohortIds = this.select("group_cohort_ids", groupType, groupName) as? Map<*, *>
+                if (!groupCohortIds.isNullOrEmpty()) {
+                    groupNameMap["cohort_ids"] = groupCohortIds
                 }
                 groups[groupType] = groupNameMap
             }
