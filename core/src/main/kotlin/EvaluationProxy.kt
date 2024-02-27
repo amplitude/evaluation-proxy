@@ -147,6 +147,10 @@ class EvaluationProxy(
         /*
          * Periodically update the local cache of deployments to project values.
          */
+        for ((project, projectProxy) in projectProxies) {
+            val deployments = projectProxy.getDeployments().associateWith { project }
+            mutex.withLock { deploymentKeysToProject.putAll(deployments) }
+        }
         scope.launch {
             while (true) {
                 delay(configuration.deploymentSyncIntervalMillis)
