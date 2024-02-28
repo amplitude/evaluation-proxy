@@ -83,6 +83,7 @@ class EvaluationProxy(
             apiKeysToProject[project.apiKey] = project
             secretKeysToProject[project.secretKey] = project
             for (deployment in deployments) {
+                log.debug("Mapping deployment {} project {}", deployment.key, project.id)
                 deploymentKeysToProject[deployment.key] = project
             }
 
@@ -147,10 +148,6 @@ class EvaluationProxy(
         /*
          * Periodically update the local cache of deployments to project values.
          */
-        for ((project, projectProxy) in projectProxies) {
-            val deployments = projectProxy.getDeployments().associateWith { project }
-            mutex.withLock { deploymentKeysToProject.putAll(deployments) }
-        }
         scope.launch {
             while (true) {
                 delay(configuration.deploymentSyncIntervalMillis)
@@ -224,7 +221,11 @@ class EvaluationProxy(
     private suspend fun getProjectProxy(deploymentKey: String?): ProjectProxy {
         val cachedProject = mutex.withLock {
             deploymentKeysToProject[deploymentKey]
-        } ?: throw HttpErrorResponseException(401, "Invalid deployment key.")
+        }
+        if (cachedProject == null) {
+            log.debug("Unable to find project for deployment {}. Current mappings: {}", deploymentKey, deploymentKeysToProject.mapValues { it.value.id })
+            throw HttpErrorResponseException(401, "Invalid deployment key.")
+        }
         return projectProxies[cachedProject] ?: throw HttpErrorResponseException(404, "Project not found.")
     }
 }
