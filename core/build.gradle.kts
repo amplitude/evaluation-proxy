@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.8.10"
-    kotlin("plugin.serialization") version "1.8.0"
+    kotlin("jvm") version "1.9.10"
+    kotlin("plugin.serialization") version "1.9.0"
     `maven-publish`
     signing
     id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
@@ -29,7 +29,6 @@ val kaml: String by project
 
 dependencies {
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
-    implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
     implementation("com.amplitude:java-sdk:$amplitudeAnalytics")
     implementation("org.json:json:$amplitudeAnalyticsJson")
     implementation("io.lettuce:lettuce-core:$lettuce")
@@ -53,7 +52,7 @@ publishing {
         create<MavenPublication>("core") {
             groupId = "com.amplitude"
             artifactId = "evaluation-proxy-core"
-            version = "0.3.2"
+            version = "0.4.4"
             from(components["java"])
             pom {
                 name.set("Amplitude Evaluation Proxy")

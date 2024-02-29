@@ -10,9 +10,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.path
 import kotlinx.coroutines.delay
 
-internal class HttpErrorResponseException(
-    val statusCode: HttpStatusCode
-) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}")
+internal class HttpErrorException(
+    val statusCode: HttpStatusCode,
+    response: HttpResponse? = null
+) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}, response=$response")
 
 internal data class RetryConfig(
     val times: Int = 8,
@@ -31,12 +32,12 @@ internal suspend fun retry(
     for (i in 0..config.times) {
         try {
             val response = block()
-            if (response.status.value in 200..299) {
+            if (response.status.value in 100..399) {
                 return response
             } else {
-                throw HttpErrorResponseException(response.status)
+                throw HttpErrorException(response.status, response)
             }
-        } catch (e: HttpErrorResponseException) {
+        } catch (e: HttpErrorException) {
             val code = e.statusCode.value
             onFailure(e)
             if (code != 429 && code in 400..499) {
@@ -52,7 +53,7 @@ internal suspend fun retry(
     throw error!!
 }
 
-suspend fun HttpClient.get(
+internal suspend fun HttpClient.get(
     url: String,
     path: String,
     block: HttpRequestBuilder.() -> Unit
@@ -60,7 +61,7 @@ suspend fun HttpClient.get(
     return request(HttpMethod.Get, url, path, block)
 }
 
-suspend fun HttpClient.request(
+internal suspend fun HttpClient.request(
     method: HttpMethod,
     url: String,
     path: String,

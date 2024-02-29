@@ -7,8 +7,8 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.deployment.DeploymentApi
 import com.amplitude.deployment.DeploymentRunner
 import com.amplitude.deployment.DeploymentStorage
-import com.amplitude.experiment.evaluation.FlagConfig
-import com.amplitude.util.getCohortIds
+import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -20,8 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class ProjectRunner(
+internal class ProjectRunner(
     private val configuration: Configuration,
+    private val projectApi: ProjectApi,
     private val deploymentApi: DeploymentApi,
     private val deploymentStorage: DeploymentStorage,
     cohortApi: CohortApi,
@@ -40,18 +41,12 @@ class ProjectRunner(
     private val cohortLoader = CohortLoader(configuration.maxCohortSize, cohortApi, cohortStorage)
 
     suspend fun start() {
-        refresh(deploymentStorage.getDeployments())
-        // Collect deployment updates from the storage
-        scope.launch {
-            deploymentStorage.deployments.collect { deployments ->
-                refresh(deployments)
-            }
-        }
-        // Periodic deployment refresher
+        refresh()
+        // Periodic deployment update and refresher
         scope.launch {
             while (true) {
-                delay(configuration.flagSyncIntervalMillis)
-                refresh(deploymentStorage.getDeployments())
+                delay(configuration.deploymentSyncIntervalMillis)
+                refresh()
             }
         }
     }
@@ -65,29 +60,47 @@ class ProjectRunner(
         supervisor.cancelAndJoin()
     }
 
-    private suspend fun refresh(deploymentKeys: Set<String>) {
-        log.debug("refresh: start - deploymentKeys=$deploymentKeys")
-        lock.withLock {
-            val jobs = mutableListOf<Job>()
-            val runningDeployments = deploymentRunners.keys.toSet()
-            val addedDeployments = deploymentKeys - runningDeployments
-            val removedDeployments = runningDeployments - deploymentKeys
-            addedDeployments.forEach { deployment ->
-                jobs += scope.launch { addDeploymentInternal(deployment) }
-            }
-            removedDeployments.forEach { deployment ->
-                jobs += scope.launch { removeDeploymentInternal(deployment) }
-            }
-            jobs.joinAll()
-            // Keep cohorts which are targeted by all stored deployments.
-            removeUnusedCohorts(deploymentKeys)
+    private suspend fun refresh() = lock.withLock {
+        log.trace("refresh: start")
+        // Get deployments from API and update the storage.
+        val networkDeployments = projectApi.getDeployments().associateBy { it.key }
+        val storageDeployments = deploymentStorage.getDeployments()
+        // Determine added and removed deployments
+        val addedDeployments = networkDeployments - storageDeployments.keys
+        val removedDeployments = storageDeployments - networkDeployments.keys
+        val startingDeployments = networkDeployments - deploymentRunners.keys
+        val jobs = mutableListOf<Job>()
+        for ((_, addedDeployment) in addedDeployments) {
+            log.info("Adding deployment $addedDeployment")
+            deploymentStorage.putDeployment(addedDeployment)
         }
-        log.debug("refresh: end - deploymentKeys=$deploymentKeys")
+        for ((_, deployment) in startingDeployments) {
+            jobs += scope.launch { addDeploymentInternal(deployment.key) }
+        }
+        for ((_, removedDeployment) in removedDeployments) {
+            log.info("Removing deployment $removedDeployment")
+            deploymentStorage.removeAllFlags(removedDeployment.key)
+            deploymentStorage.removeDeployment(removedDeployment.key)
+            jobs += scope.launch { removeDeploymentInternal(removedDeployment.key) }
+        }
+        jobs.joinAll()
+        // Keep cohorts which are targeted by all stored deployments.
+        removeUnusedCohorts(networkDeployments.keys)
+        log.debug(
+            "Project refresh finished: addedDeployments={}, removedDeployments={}, startedDeployments={}",
+            addedDeployments.keys,
+            removedDeployments.keys,
+            startingDeployments.keys
+        )
+        log.trace("refresh: end")
     }
 
     // Must be run within lock
     private suspend fun addDeploymentInternal(deploymentKey: String) {
-        log.info("Adding deployment $deploymentKey")
+        if (deploymentRunners.contains(deploymentKey)) {
+            return
+        }
+        log.debug("Adding and starting deployment runner for $deploymentKey")
         val deploymentRunner = DeploymentRunner(
             configuration,
             deploymentKey,
@@ -101,18 +114,16 @@ class ProjectRunner(
 
     // Must be run within lock
     private suspend fun removeDeploymentInternal(deploymentKey: String) {
-        log.info("Removing deployment $deploymentKey")
+        log.debug("Removing and stopping deployment runner for $deploymentKey")
         deploymentRunners.remove(deploymentKey)?.stop()
-        deploymentStorage.removeFlagConfigs(deploymentKey)
-        deploymentStorage.removeDeployment(deploymentKey)
     }
 
     private suspend fun removeUnusedCohorts(deploymentKeys: Set<String>) {
-        val allFlagConfigs = mutableListOf<FlagConfig>()
+        val allFlagConfigs = mutableListOf<EvaluationFlag>()
         for (deploymentKey in deploymentKeys) {
-            allFlagConfigs += deploymentStorage.getFlagConfigs(deploymentKey) ?: continue
+            allFlagConfigs += deploymentStorage.getAllFlags(deploymentKey).values
         }
-        val allTargetedCohortIds = allFlagConfigs.getCohortIds()
+        val allTargetedCohortIds = allFlagConfigs.getAllCohortIds()
         val allStoredCohortDescriptions = cohortStorage.getCohortDescriptions().values
         for (cohortDescription in allStoredCohortDescriptions) {
             if (!allTargetedCohortIds.contains(cohortDescription.id)) {

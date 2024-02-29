@@ -1,21 +1,23 @@
 package com.amplitude.assignment
 
-import com.amplitude.experiment.evaluation.FlagResult
-import com.amplitude.experiment.evaluation.SkylabUser
+import com.amplitude.experiment.evaluation.EvaluationContext
+import com.amplitude.experiment.evaluation.EvaluationVariant
+import com.amplitude.util.deviceId
+import com.amplitude.util.userId
 
-const val DAY_MILLIS: Long = 24 * 60 * 60 * 1000
+internal const val DAY_MILLIS: Long = 24 * 60 * 60 * 1000
 
-data class Assignment(
-    val user: SkylabUser,
-    val results: Map<String, FlagResult>,
+internal data class Assignment(
+    val context: EvaluationContext,
+    val results: Map<String, EvaluationVariant>,
     val timestamp: Long = System.currentTimeMillis()
 )
 
-fun Assignment.canonicalize(): String {
-    val sb = StringBuilder().append(this.user.userId?.trim(), " ", this.user.deviceId?.trim(), " ")
+internal fun Assignment.canonicalize(): String {
+    val sb = StringBuilder().append(this.context.userId()?.trim(), " ", this.context.deviceId()?.trim(), " ")
     for (key in this.results.keys.sorted()) {
-        val value = this.results[key]
-        sb.append(key.trim(), " ", value?.variant?.key?.trim(), " ")
+        val variant = this.results[key]
+        sb.append(key.trim(), " ", variant?.key?.trim(), " ")
     }
     return sb.toString()
 }

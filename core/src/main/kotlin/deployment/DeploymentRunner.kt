@@ -2,7 +2,7 @@ package com.amplitude.deployment
 
 import com.amplitude.Configuration
 import com.amplitude.cohort.CohortLoader
-import com.amplitude.util.getCohortIds
+import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -10,7 +10,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class DeploymentRunner(
+internal class DeploymentRunner(
     @Volatile var configuration: Configuration,
     private val deploymentKey: String,
     private val deploymentApi: DeploymentApi,
@@ -27,7 +27,7 @@ class DeploymentRunner(
     private val deploymentLoader = DeploymentLoader(deploymentApi, deploymentStorage, cohortLoader)
 
     suspend fun start() {
-        log.debug("start: - deploymentKey=$deploymentKey")
+        log.trace("start: - deploymentKey=$deploymentKey")
         deploymentLoader.loadDeployment(deploymentKey)
         // Periodic flag config loader
         scope.launch {
@@ -40,10 +40,8 @@ class DeploymentRunner(
         scope.launch {
             while (true) {
                 delay(configuration.cohortSyncIntervalMillis)
-                val cohortIds = deploymentStorage.getFlagConfigs(deploymentKey)?.getCohortIds()
-                if (!cohortIds.isNullOrEmpty()) {
-                    cohortLoader.loadCohorts(cohortIds)
-                }
+                val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getAllCohortIds()
+                cohortLoader.loadCohorts(cohortIds)
             }
         }
     }

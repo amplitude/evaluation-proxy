@@ -3,8 +3,8 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     application
     id("io.ktor.plugin") version "2.2.4"
-    kotlin("jvm") version "1.8.10"
-    kotlin("plugin.serialization") version "1.8.0"
+    kotlin("jvm") version "1.9.10"
+    kotlin("plugin.serialization") version "1.9.0"
     id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
 }
 
@@ -34,7 +34,6 @@ val serializationVersion: String by project
 dependencies {
     implementation(project(":core"))
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
-    implementation("com.amplitude:evaluation-serialization:$experimentEvaluationVersion")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")

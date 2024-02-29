@@ -2,11 +2,11 @@ package com.amplitude.assignment
 
 import com.amplitude.util.Cache
 
-interface AssignmentFilter {
+internal interface AssignmentFilter {
     suspend fun shouldTrack(assignment: Assignment): Boolean
 }
 
-class InMemoryAssignmentFilter(size: Int) : AssignmentFilter {
+internal class InMemoryAssignmentFilter(size: Int) : AssignmentFilter {
 
     // Cache of canonical assignment to the last sent timestamp.
     private val cache = Cache<String, Unit>(size, DAY_MILLIS)
