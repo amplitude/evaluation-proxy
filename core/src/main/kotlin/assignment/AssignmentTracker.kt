@@ -10,6 +10,7 @@ import com.amplitude.Event
 import com.amplitude.Metrics
 import com.amplitude.util.deviceId
 import com.amplitude.util.groups
+import com.amplitude.util.logger
 import com.amplitude.util.userId
 import org.json.JSONObject
 
@@ -30,6 +31,10 @@ internal class AmplitudeAssignmentTracker(
     private val assignmentFilter: AssignmentFilter
 ) : AssignmentTracker {
 
+    companion object {
+        val log by logger()
+    }
+
     constructor(
         apiKey: String,
         config: AssignmentConfiguration
@@ -44,13 +49,17 @@ internal class AmplitudeAssignmentTracker(
     )
 
     override suspend fun track(assignment: Assignment) {
-        Metrics.track(AssignmentEvent)
-        if (assignmentFilter.shouldTrack(assignment)) {
-            Metrics.with({ AssignmentEventSend }, { e -> AssignmentEventSendFailure(e) }) {
-                amplitude.logEvent(assignment.toAmplitudeEvent())
+        try {
+            Metrics.track(AssignmentEvent)
+            if (assignmentFilter.shouldTrack(assignment)) {
+                Metrics.with({ AssignmentEventSend }, { e -> AssignmentEventSendFailure(e) }) {
+                    amplitude.logEvent(assignment.toAmplitudeEvent())
+                }
+            } else {
+                Metrics.track(AssignmentEventFilter)
             }
-        } else {
-            Metrics.track(AssignmentEventFilter)
+        } catch (e: Exception) {
+            log.error("Failed to track assignment event", e)
         }
     }
 }
