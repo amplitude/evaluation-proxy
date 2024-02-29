@@ -25,7 +25,7 @@ import kotlinx.serialization.encodeToString
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
-const val VERSION = "0.3.2"
+const val VERSION = "0.4.4"
 
 class HttpErrorResponseException(
     val status: Int,
