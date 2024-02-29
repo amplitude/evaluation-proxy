@@ -1,12 +1,14 @@
+@file:UseSerializers(AnySerializer::class)
+
 package com.amplitude
 
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
+import com.amplitude.util.AnySerializer
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -25,6 +27,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.FileNotFoundException
@@ -276,7 +281,7 @@ private fun ApplicationRequest.getFlagKeys(): Set<String> {
 private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
     val b64User = this.headers["X-Amp-Exp-User"]
     val userJson = Base64.getDecoder().decode(b64User).toString(Charsets.UTF_8)
-    return json.decodeFromString(userJson)
+    return json.decodeFromString<JsonObject>(userJson).toMap()
 }
 
 /**
@@ -284,7 +289,7 @@ private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
  */
 private suspend fun ApplicationRequest.getUserFromBody(): Map<String, Any?> {
     val userJson = this.receiveChannel().toByteArray().toString(Charsets.UTF_8)
-    return json.decodeFromString(userJson)
+    return json.decodeFromString<JsonObject>(userJson).toMap()
 }
 
 /**
