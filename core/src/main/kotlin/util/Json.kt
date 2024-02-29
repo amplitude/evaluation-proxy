@@ -23,7 +23,45 @@ val json = Json {
     explicitNulls = false
 }
 
-object AnySerializer : KSerializer<Any?> {
+internal fun Any?.toJsonElement(): JsonElement = when (this) {
+    null -> JsonNull
+    is Map<*, *> -> toJsonObject()
+    is Collection<*> -> toJsonArray()
+    is Boolean -> JsonPrimitive(this)
+    is Number -> JsonPrimitive(this)
+    is String -> JsonPrimitive(this)
+    else -> JsonPrimitive(toString())
+}
+
+internal fun Collection<*>.toJsonArray(): JsonArray = JsonArray(map { it.toJsonElement() })
+
+internal fun Map<*, *>.toJsonObject(): JsonObject = JsonObject(
+    mapNotNull {
+        (it.key as? String ?: return@mapNotNull null) to it.value.toJsonElement()
+    }.toMap()
+)
+
+internal fun JsonElement.toAny(): Any? {
+    return when (this) {
+        is JsonPrimitive -> toAny()
+        is JsonArray -> toList()
+        is JsonObject -> toMap()
+    }
+}
+
+internal fun JsonPrimitive.toAny(): Any? {
+    return if (isString) {
+        contentOrNull
+    } else {
+        booleanOrNull ?: intOrNull ?: longOrNull ?: doubleOrNull
+    }
+}
+
+internal fun JsonArray.toList(): List<Any?> = map { it.toAny() }
+
+fun JsonObject.toMap(): Map<String, Any?> = mapValues { it.value.toAny() }
+
+internal object AnySerializer : KSerializer<Any?> {
     private val delegate = JsonElement.serializer()
     override val descriptor: SerialDescriptor
         get() = SerialDescriptor("Any", delegate.descriptor)
@@ -38,41 +76,3 @@ object AnySerializer : KSerializer<Any?> {
         return jsonElement.toAny()
     }
 }
-
-fun Any?.toJsonElement(): JsonElement = when (this) {
-    null -> JsonNull
-    is Map<*, *> -> toJsonObject()
-    is Collection<*> -> toJsonArray()
-    is Boolean -> JsonPrimitive(this)
-    is Number -> JsonPrimitive(this)
-    is String -> JsonPrimitive(this)
-    else -> JsonPrimitive(toString())
-}
-
-fun Collection<*>.toJsonArray(): JsonArray = JsonArray(map { it.toJsonElement() })
-
-fun Map<*, *>.toJsonObject(): JsonObject = JsonObject(
-    mapNotNull {
-        (it.key as? String ?: return@mapNotNull null) to it.value.toJsonElement()
-    }.toMap()
-)
-
-fun JsonElement.toAny(): Any? {
-    return when (this) {
-        is JsonPrimitive -> toAny()
-        is JsonArray -> toList()
-        is JsonObject -> toMap()
-    }
-}
-
-fun JsonPrimitive.toAny(): Any? {
-    return if (isString) {
-        contentOrNull
-    } else {
-        booleanOrNull ?: intOrNull ?: longOrNull ?: doubleOrNull
-    }
-}
-
-fun JsonArray.toList(): List<Any?> = map { it.toAny() }
-
-fun JsonObject.toMap(): Map<String, Any?> = mapValues { it.value.toAny() }
