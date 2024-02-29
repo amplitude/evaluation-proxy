@@ -1,10 +1,7 @@
-@file:UseSerializers(AnySerializer::class)
-
 package com.amplitude
 
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
-import com.amplitude.util.AnySerializer
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
@@ -27,7 +24,6 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.toByteArray
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.FileNotFoundException
