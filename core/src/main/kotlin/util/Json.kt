@@ -54,7 +54,7 @@ fun Collection<*>.toJsonArray(): JsonArray = JsonArray(map { it.toJsonElement() 
 fun Map<*, *>.toJsonObject(): JsonObject = JsonObject(
     mapNotNull {
         (it.key as? String ?: return@mapNotNull null) to it.value.toJsonElement()
-    }.toMap(),
+    }.toMap()
 )
 
 fun JsonElement.toAny(): Any? {
@@ -76,5 +76,3 @@ fun JsonPrimitive.toAny(): Any? {
 fun JsonArray.toList(): List<Any?> = map { it.toAny() }
 
 fun JsonObject.toMap(): Map<String, Any?> = mapValues { it.value.toAny() }
-
-

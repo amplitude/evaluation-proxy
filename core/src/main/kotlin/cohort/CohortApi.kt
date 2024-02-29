@@ -31,7 +31,7 @@ private data class SerialCohortInfoResponse(
     @SerialName("size") val size: Int = Int.MAX_VALUE,
     @SerialName("description") val description: String? = null,
     @SerialName("last_computed") val lastComputed: Long = 0,
-    @SerialName("group_type") val groupType: String = USER_GROUP_TYPE,
+    @SerialName("group_type") val groupType: String = USER_GROUP_TYPE
 )
 
 @Serializable
@@ -73,7 +73,7 @@ internal class CohortApiV5(
             id = serialDescription.cohortId,
             lastComputed = serialDescription.lastComputed,
             size = serialDescription.size,
-            groupType = serialDescription.groupType,
+            groupType = serialDescription.groupType
         )
     }
 

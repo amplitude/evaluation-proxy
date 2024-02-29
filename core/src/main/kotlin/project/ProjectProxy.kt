@@ -112,7 +112,6 @@ internal class ProjectProxy(
         return cohortStorage.getCohortMembershipsForGroup(groupType, groupName, cohortIds)
     }
 
-
     suspend fun evaluate(
         deploymentKey: String?,
         user: Map<String, Any?>?,
