@@ -34,7 +34,7 @@ internal fun getDeploymentStorage(projectId: String, redisConfiguration: RedisCo
         } else {
             redis
         }
-        RedisDeploymentStorage(projectId, redisConfiguration.prefix, redis, readOnlyRedis)
+        RedisDeploymentStorage(redisConfiguration.prefix, projectId, redis, readOnlyRedis)
     }
 }
 
