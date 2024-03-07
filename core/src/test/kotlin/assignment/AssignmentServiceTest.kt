@@ -18,7 +18,7 @@ class AssignmentServiceTest {
             "flag-key-1" to EvaluationVariant(
                 key = "on",
                 metadata = mapOf(
-                    "version" to 1,
+                    "flagVersion" to 1,
                     "segmentName" to "Segment 1"
                 )
             ),
@@ -26,7 +26,7 @@ class AssignmentServiceTest {
                 key = "off",
                 metadata = mapOf(
                     "default" to true,
-                    "version" to 1,
+                    "flagVersion" to 1,
                     "segmentName" to "All Other Users"
                 )
             )
