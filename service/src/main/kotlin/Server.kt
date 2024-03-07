@@ -5,6 +5,7 @@ import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
+import com.amplitude.util.toAnyMap
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -275,7 +276,7 @@ private fun ApplicationRequest.getFlagKeys(): Set<String> {
 private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
     val b64User = this.headers["X-Amp-Exp-User"]
     val userJson = Base64.getDecoder().decode(b64User).toString(Charsets.UTF_8)
-    return json.decodeFromString<JsonObject>(userJson).toMap()
+    return json.decodeFromString<JsonObject>(userJson).toAnyMap()
 }
 
 /**
@@ -283,7 +284,7 @@ private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
  */
 private suspend fun ApplicationRequest.getUserFromBody(): Map<String, Any?> {
     val userJson = this.receiveChannel().toByteArray().toString(Charsets.UTF_8)
-    return json.decodeFromString<JsonObject>(userJson).toMap()
+    return json.decodeFromString<JsonObject>(userJson).toAnyMap()
 }
 
 /**

@@ -44,8 +44,8 @@ internal fun Map<*, *>.toJsonObject(): JsonObject = JsonObject(
 internal fun JsonElement.toAny(): Any? {
     return when (this) {
         is JsonPrimitive -> toAny()
-        is JsonArray -> toList()
-        is JsonObject -> toMap()
+        is JsonArray -> toAnyList()
+        is JsonObject -> toAnyMap()
     }
 }
 
@@ -57,9 +57,9 @@ internal fun JsonPrimitive.toAny(): Any? {
     }
 }
 
-internal fun JsonArray.toList(): List<Any?> = map { it.toAny() }
+internal fun JsonArray.toAnyList(): List<Any?> = map { it.toAny() }
 
-fun JsonObject.toMap(): Map<String, Any?> = mapValues { it.value.toAny() }
+fun JsonObject.toAnyMap(): Map<String, Any?> = mapValues { it.value.toAny() }
 
 internal object AnySerializer : KSerializer<Any?> {
     private val delegate = JsonElement.serializer()
