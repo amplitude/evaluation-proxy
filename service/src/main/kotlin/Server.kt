@@ -44,30 +44,33 @@ fun main() {
     log.info("Accessing proxy configuration.")
     val proxyConfigFilePath = stringEnv("PROXY_CONFIG_FILE_PATH", "/etc/evaluation-proxy-config.yaml")!!
     val proxyProjectsFilePath = stringEnv("PROXY_PROJECTS_FILE_PATH", proxyConfigFilePath)!!
-    val projectsFile = try {
-        ProjectsFile.fromFile(proxyProjectsFilePath).also {
-            log.info("Found projects file at $proxyProjectsFilePath")
+    val projectsFile =
+        try {
+            ProjectsFile.fromFile(proxyProjectsFilePath).also {
+                log.info("Found projects file at $proxyProjectsFilePath")
+            }
+        } catch (file: FileNotFoundException) {
+            log.info("Proxy projects file not found at $proxyProjectsFilePath, reading project from env.")
+            ProjectsFile.fromEnv()
         }
-    } catch (file: FileNotFoundException) {
-        log.info("Proxy projects file not found at $proxyProjectsFilePath, reading project from env.")
-        ProjectsFile.fromEnv()
-    }
-    val configFile = try {
-        ConfigurationFile.fromFile(proxyConfigFilePath).also {
-            log.info("Found configuration file at $proxyConfigFilePath")
+    val configFile =
+        try {
+            ConfigurationFile.fromFile(proxyConfigFilePath).also {
+                log.info("Found configuration file at $proxyConfigFilePath")
+            }
+        } catch (file: FileNotFoundException) {
+            log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
+            ConfigurationFile.fromEnv()
         }
-    } catch (file: FileNotFoundException) {
-        log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
-        ConfigurationFile.fromEnv()
-    }
 
     /*
      * Initialize and start the evaluation proxy.
      */
-    evaluationProxy = EvaluationProxy(
-        projectsFile.projects,
-        configFile.configuration
-    )
+    evaluationProxy =
+        EvaluationProxy(
+            projectsFile.projects,
+            configFile.configuration,
+        )
 
     /*
      * Start the server.
@@ -76,7 +79,7 @@ fun main() {
         factory = Netty,
         port = configFile.configuration.port,
         host = "0.0.0.0",
-        module = Application::proxyServer
+        module = Application::proxyServer,
     ).start(wait = true)
 }
 
@@ -102,14 +105,13 @@ fun Application.proxyServer() {
                     plugin.doShutdown(call)
                 }
             }
-        }
+        },
     )
 
     /*
      * Configure endpoints.
      */
     routing {
-
         // Local Evaluation
 
         get("/sdk/v2/flags") {
@@ -173,7 +175,7 @@ fun Application.proxyServer() {
 
 suspend fun ApplicationCall.evaluate(
     evaluationProxy: EvaluationProxy,
-    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
+    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
     // Deployment key is included in Authorization header with prefix "Api-Key "
     val deploymentKey = request.getDeploymentKey()
@@ -185,7 +187,7 @@ suspend fun ApplicationCall.evaluate(
 
 suspend fun ApplicationCall.evaluateV1(
     evaluationProxy: EvaluationProxy,
-    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
+    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
     // Deployment key is included in Authorization header with prefix "Api-Key "
     val deploymentKey = request.getDeploymentKey()
@@ -262,24 +264,27 @@ private fun ApplicationRequest.getUserFromQuery(): JsonObject {
     val userId = this.queryParameters["user_id"]
     val deviceId = this.queryParameters["device_id"]
     val context = this.queryParameters["context"]
-    var user: JsonObject = if (context != null) {
-        json.decodeFromString(context)
-    } else {
-        JsonObject(emptyMap())
-    }
+    var user: JsonObject =
+        if (context != null) {
+            json.decodeFromString(context)
+        } else {
+            JsonObject(emptyMap())
+        }
     if (userId != null) {
-        user = JsonObject(
-            user.toMutableMap().apply {
-                put("user_id", JsonPrimitive(userId))
-            }
-        )
+        user =
+            JsonObject(
+                user.toMutableMap().apply {
+                    put("user_id", JsonPrimitive(userId))
+                },
+            )
     }
     if (deviceId != null) {
-        user = JsonObject(
-            user.toMutableMap().apply {
-                put("device_id", JsonPrimitive(userId))
-            }
-        )
+        user =
+            JsonObject(
+                user.toMutableMap().apply {
+                    put("device_id", JsonPrimitive(userId))
+                },
+            )
     }
     return user
 }

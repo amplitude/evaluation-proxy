@@ -12,7 +12,7 @@ import java.io.File
 
 @Serializable
 data class ProjectsFile(
-    val projects: List<ProjectConfiguration>
+    val projects: List<ProjectConfiguration>,
 ) {
     companion object {
         fun fromEnv(): ProjectsFile {
@@ -35,10 +35,9 @@ data class ProjectsFile(
 
 @Serializable
 data class ConfigurationFile(
-    val configuration: Configuration = Configuration()
+    val configuration: Configuration = Configuration(),
 ) {
     companion object {
-
         fun fromEnv(): ConfigurationFile {
             val configuration = Configuration.fromEnv()
             return ConfigurationFile(configuration)
@@ -61,13 +60,16 @@ data class ConfigurationFile(
 data class ProjectConfiguration(
     val apiKey: String,
     val secretKey: String,
-    val managementKey: String
+    val managementKey: String,
 ) {
     companion object {
         fun fromEnv(): ProjectConfiguration {
             val apiKey = checkNotNull(stringEnv(EnvKey.API_KEY)) { "${EnvKey.API_KEY} environment variable must be set." }
             val secretKey = checkNotNull(stringEnv(EnvKey.SECRET_KEY)) { "${EnvKey.SECRET_KEY} environment variable must be set." }
-            val managementKey = checkNotNull(stringEnv(EnvKey.EXPERIMENT_MANAGEMENT_KEY)) { "${EnvKey.EXPERIMENT_MANAGEMENT_KEY} environment variable must be set." }
+            val managementKey =
+                checkNotNull(
+                    stringEnv(EnvKey.EXPERIMENT_MANAGEMENT_KEY),
+                ) { "${EnvKey.EXPERIMENT_MANAGEMENT_KEY} environment variable must be set." }
             return ProjectConfiguration(apiKey, secretKey, managementKey)
         }
     }
@@ -86,32 +88,36 @@ data class Configuration(
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
     val assignment: AssignmentConfiguration = AssignmentConfiguration(),
-    val redis: RedisConfiguration? = null
+    val redis: RedisConfiguration? = null,
 ) {
     companion object {
-        fun fromEnv() = Configuration(
-            port = intEnv(EnvKey.PORT, Default.PORT)!!,
-            serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!,
-            serverUrl = stringEnv(EnvKey.SERVER_URL, Default.US_SERVER_URL)!!,
-            cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.US_COHORT_SERVER_URL)!!,
-            managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL, Default.US_MANAGEMENT_SERVER_URL)!!,
-            analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL, Default.US_ANALYTICS_SERVER_URL)!!,
-            deploymentSyncIntervalMillis = longEnv(
-                EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
-                Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS
-            )!!,
-            flagSyncIntervalMillis = longEnv(
-                EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
-                Default.FLAG_SYNC_INTERVAL_MILLIS
-            )!!,
-            cohortSyncIntervalMillis = longEnv(
-                EnvKey.COHORT_SYNC_INTERVAL_MILLIS,
-                Default.COHORT_SYNC_INTERVAL_MILLIS
-            )!!,
-            maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
-            assignment = AssignmentConfiguration.fromEnv(),
-            redis = RedisConfiguration.fromEnv()
-        )
+        fun fromEnv() =
+            Configuration(
+                port = intEnv(EnvKey.PORT, Default.PORT)!!,
+                serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!,
+                serverUrl = stringEnv(EnvKey.SERVER_URL, Default.US_SERVER_URL)!!,
+                cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.US_COHORT_SERVER_URL)!!,
+                managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL, Default.US_MANAGEMENT_SERVER_URL)!!,
+                analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL, Default.US_ANALYTICS_SERVER_URL)!!,
+                deploymentSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
+                        Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                flagSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
+                        Default.FLAG_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                cohortSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.COHORT_SYNC_INTERVAL_MILLIS,
+                        Default.COHORT_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
+                assignment = AssignmentConfiguration.fromEnv(),
+                redis = RedisConfiguration.fromEnv(),
+            )
     }
 }
 
@@ -120,27 +126,32 @@ data class AssignmentConfiguration(
     val filterCapacity: Int = Default.ASSIGNMENT_FILTER_CAPACITY,
     val eventUploadThreshold: Int = Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
     val eventUploadPeriodMillis: Int = Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
-    val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE
+    val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE,
 ) {
     companion object {
-        fun fromEnv() = AssignmentConfiguration(
-            filterCapacity = intEnv(
-                EnvKey.ASSIGNMENT_FILTER_CAPACITY,
-                Default.ASSIGNMENT_FILTER_CAPACITY
-            )!!,
-            eventUploadThreshold = intEnv(
-                EnvKey.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
-                Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD
-            )!!,
-            eventUploadPeriodMillis = intEnv(
-                EnvKey.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
-                Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS
-            )!!,
-            useBatchMode = booleanEnv(
-                EnvKey.ASSIGNMENT_USE_BATCH_MODE,
-                Default.ASSIGNMENT_USE_BATCH_MODE
+        fun fromEnv() =
+            AssignmentConfiguration(
+                filterCapacity =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_FILTER_CAPACITY,
+                        Default.ASSIGNMENT_FILTER_CAPACITY,
+                    )!!,
+                eventUploadThreshold =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
+                        Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
+                    )!!,
+                eventUploadPeriodMillis =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
+                        Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
+                    )!!,
+                useBatchMode =
+                    booleanEnv(
+                        EnvKey.ASSIGNMENT_USE_BATCH_MODE,
+                        Default.ASSIGNMENT_USE_BATCH_MODE,
+                    ),
             )
-        )
     }
 }
 
@@ -148,7 +159,7 @@ data class AssignmentConfiguration(
 data class RedisConfiguration(
     val uri: String? = null,
     val readOnlyUri: String? = uri,
-    val prefix: String = Default.REDIS_PREFIX
+    val prefix: String = Default.REDIS_PREFIX,
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
@@ -159,7 +170,7 @@ data class RedisConfiguration(
                 RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
-                    prefix = redisPrefix
+                    prefix = redisPrefix,
                 )
             } else {
                 null

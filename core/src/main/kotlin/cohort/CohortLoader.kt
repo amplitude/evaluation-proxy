@@ -13,36 +13,37 @@ import kotlinx.coroutines.launch
 internal class CohortLoader(
     private val maxCohortSize: Int,
     private val cohortApi: CohortApi,
-    private val cohortStorage: CohortStorage
+    private val cohortStorage: CohortStorage,
 ) {
-
     companion object {
         val log by logger()
     }
 
     private val loader = Loader()
 
-    suspend fun loadCohorts(cohortIds: Set<String>) = coroutineScope {
-        val jobs = mutableListOf<Job>()
-        for (cohortId in cohortIds) {
-            jobs += launch { loadCohort(cohortId) }
+    suspend fun loadCohorts(cohortIds: Set<String>) =
+        coroutineScope {
+            val jobs = mutableListOf<Job>()
+            for (cohortId in cohortIds) {
+                jobs += launch { loadCohort(cohortId) }
+            }
+            jobs.joinAll()
         }
-        jobs.joinAll()
-    }
 
     private suspend fun loadCohort(cohortId: String) {
         log.trace("loadCohort: start - cohortId={}", cohortId)
         val storageCohort = cohortStorage.getCohortDescription(cohortId)
         loader.load(cohortId) {
             try {
-                val cohort = Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
-                    try {
-                        cohortApi.getCohort(cohortId, storageCohort?.lastModified, maxCohortSize)
-                    } catch (e: CohortNotModifiedException) {
-                        log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
-                        null
+                val cohort =
+                    Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
+                        try {
+                            cohortApi.getCohort(cohortId, storageCohort?.lastModified, maxCohortSize)
+                        } catch (e: CohortNotModifiedException) {
+                            log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
+                            null
+                        }
                     }
-                }
                 if (cohort != null) {
                     cohortStorage.putCohort(cohort)
                 }

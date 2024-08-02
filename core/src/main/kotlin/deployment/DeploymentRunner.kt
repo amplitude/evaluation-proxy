@@ -17,7 +17,6 @@ internal class DeploymentRunner(
     private val deploymentStorage: DeploymentStorage,
     private val deploymentLoader: DeploymentLoader,
 ) {
-
     companion object {
         val log by logger()
     }
@@ -27,15 +26,16 @@ internal class DeploymentRunner(
 
     suspend fun start() {
         log.trace("start: - deploymentKey=$deploymentKey")
-        val job = scope.launch {
-            try {
-                deploymentLoader.loadDeployment(deploymentKey)
-            } catch (t: Throwable) {
-                // Catch failure and continue to run pollers. Assume deployment
-                // load will eventually succeed.
-                log.error("Load failed for deployment $deploymentKey", t)
+        val job =
+            scope.launch {
+                try {
+                    deploymentLoader.loadDeployment(deploymentKey)
+                } catch (t: Throwable) {
+                    // Catch failure and continue to run pollers. Assume deployment
+                    // load will eventually succeed.
+                    log.error("Load failed for deployment $deploymentKey", t)
+                }
             }
-        }
         // Periodic flag config loader
         scope.launch {
             while (true) {

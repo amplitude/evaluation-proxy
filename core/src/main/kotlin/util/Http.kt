@@ -12,21 +12,21 @@ import kotlinx.coroutines.delay
 
 internal class HttpErrorException(
     val statusCode: HttpStatusCode,
-    response: HttpResponse? = null
+    response: HttpResponse? = null,
 ) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}, response=$response")
 
 internal data class RetryConfig(
     val times: Int = 8,
     val initialDelayMillis: Long = 100,
     val maxDelay: Long = 10000,
-    val factor: Double = 2.0
+    val factor: Double = 2.0,
 )
 
 internal suspend fun retry(
     config: RetryConfig = RetryConfig(),
     onFailure: (Exception) -> Unit = {},
     acceptCodes: Set<HttpStatusCode> = emptySet(),
-    block: suspend () -> HttpResponse
+    block: suspend () -> HttpResponse,
 ): HttpResponse {
     var currentDelay = config.initialDelayMillis
     var error: Exception? = null
@@ -57,7 +57,7 @@ internal suspend fun retry(
 internal suspend fun HttpClient.get(
     url: String,
     path: String,
-    block: HttpRequestBuilder.() -> Unit
+    block: HttpRequestBuilder.() -> Unit,
 ): HttpResponse {
     return request(HttpMethod.Get, url, path, block)
 }
@@ -66,7 +66,7 @@ internal suspend fun HttpClient.request(
     method: HttpMethod,
     url: String,
     path: String,
-    block: HttpRequestBuilder.() -> Unit
+    block: HttpRequestBuilder.() -> Unit,
 ): HttpResponse {
     return request {
         this.method = method

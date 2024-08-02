@@ -18,7 +18,7 @@ internal data class CohortDescription(
     @SerialName("cohortId") val id: String,
     val groupType: String,
     val size: Int,
-    val lastModified: Long
+    val lastModified: Long,
 ) {
     fun toCohort(members: Set<String>): Cohort {
         return Cohort(
@@ -26,7 +26,7 @@ internal data class CohortDescription(
             groupType = groupType,
             size = size,
             lastModified = lastModified,
-            members = members
+            members = members,
         )
     }
 }
@@ -36,37 +36,51 @@ internal fun Cohort.toCohortDescription(): CohortDescription {
         id = id,
         groupType = groupType,
         size = size,
-        lastModified = lastModified
+        lastModified = lastModified,
     )
 }
 
 internal interface CohortStorage {
     suspend fun getCohort(cohortId: String): Cohort?
+
     suspend fun getCohorts(): Map<String, Cohort>
+
     suspend fun getCohortDescription(cohortId: String): CohortDescription?
+
     suspend fun getCohortDescriptions(): Map<String, CohortDescription>
-    suspend fun getCohortMemberships(groupType: String, groupName: String, cohortIds: Set<String>): Set<String>
+
+    suspend fun getCohortMemberships(
+        groupType: String,
+        groupName: String,
+        cohortIds: Set<String>,
+    ): Set<String>
+
     suspend fun putCohort(cohort: Cohort)
+
     suspend fun deleteCohort(description: CohortDescription)
 }
 
-internal fun getCohortStorage(projectId: String, redisConfiguration: RedisConfiguration?, ttl: Duration): CohortStorage {
+internal fun getCohortStorage(
+    projectId: String,
+    redisConfiguration: RedisConfiguration?,
+    ttl: Duration,
+): CohortStorage {
     val uri = redisConfiguration?.uri
     return if (uri == null) {
         InMemoryCohortStorage()
     } else {
         val redis = RedisConnection(uri)
-        val readOnlyRedis = if (redisConfiguration.readOnlyUri != null) {
-            RedisConnection(redisConfiguration.readOnlyUri)
-        } else {
-            redis
-        }
+        val readOnlyRedis =
+            if (redisConfiguration.readOnlyUri != null) {
+                RedisConnection(redisConfiguration.readOnlyUri)
+            } else {
+                redis
+            }
         RedisCohortStorage(projectId, ttl, redisConfiguration.prefix, redis, readOnlyRedis)
     }
 }
 
 internal class InMemoryCohortStorage : CohortStorage {
-
     private val lock = Mutex()
     private val cohorts = mutableMapOf<String, Cohort>()
 
@@ -86,7 +100,11 @@ internal class InMemoryCohortStorage : CohortStorage {
         return lock.withLock { cohorts.toMap() }.mapValues { it.value.toCohortDescription() }
     }
 
-    override suspend fun getCohortMemberships(groupType: String, groupName: String, cohortIds: Set<String>): Set<String> {
+    override suspend fun getCohortMemberships(
+        groupType: String,
+        groupName: String,
+        cohortIds: Set<String>,
+    ): Set<String> {
         val result = mutableSetOf<String>()
         lock.withLock {
             for (cohortId in cohortIds) {
@@ -116,9 +134,8 @@ internal class RedisCohortStorage(
     private val ttl: Duration,
     private val prefix: String,
     private val redis: Redis,
-    private val readOnlyRedis: Redis
+    private val readOnlyRedis: Redis,
 ) : CohortStorage {
-
     companion object {
         val log by logger()
     }
@@ -160,7 +177,7 @@ internal class RedisCohortStorage(
     override suspend fun getCohortMemberships(
         groupType: String,
         groupName: String,
-        cohortIds: Set<String>
+        cohortIds: Set<String>,
     ): Set<String> {
         val descriptions = getCohortDescriptions()
         val memberships = mutableSetOf<String>()
@@ -172,16 +189,17 @@ internal class RedisCohortStorage(
                 continue
             }
             // High volume, use read connection
-            val isMember = readOnlyRedis.sismember(
-                RedisKey.CohortMembers(
-                    prefix,
-                    projectId,
-                    description.id,
-                    description.groupType,
-                    description.lastModified
-                ),
-                groupName
-            )
+            val isMember =
+                readOnlyRedis.sismember(
+                    RedisKey.CohortMembers(
+                        prefix,
+                        projectId,
+                        description.id,
+                        description.groupType,
+                        description.lastModified,
+                    ),
+                    groupName,
+                )
             if (isMember) {
                 memberships += description.id
             }
@@ -200,9 +218,9 @@ internal class RedisCohortStorage(
                     projectId,
                     description.id,
                     description.groupType,
-                    description.lastModified
+                    description.lastModified,
                 ),
-                cohort.members
+                cohort.members,
             )
             redis.hset(RedisKey.CohortDescriptions(prefix, projectId), mapOf(description.id to jsonEncodedDescription))
             if (existingDescription != null) {
@@ -212,9 +230,9 @@ internal class RedisCohortStorage(
                         projectId,
                         existingDescription.id,
                         existingDescription.groupType,
-                        existingDescription.lastModified
+                        existingDescription.lastModified,
                     ),
-                    ttl
+                    ttl,
                 )
             }
         }
@@ -228,15 +246,15 @@ internal class RedisCohortStorage(
                 projectId,
                 description.id,
                 description.groupType,
-                description.lastModified
-            )
+                description.lastModified,
+            ),
         )
     }
 
     private suspend fun getCohortMembers(
         cohortId: String,
         cohortGroupType: String,
-        cohortLastModified: Long
+        cohortLastModified: Long,
     ): Set<String>? {
         return redis.smembers(RedisKey.CohortMembers(prefix, projectId, cohortId, cohortGroupType, cohortLastModified))
     }

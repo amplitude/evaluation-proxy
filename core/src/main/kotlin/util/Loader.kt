@@ -8,11 +8,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class Loader {
-
     private val jobsMutex = Mutex()
     private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun load(key: String, loader: suspend CoroutineScope.() -> Unit) = coroutineScope {
+    suspend fun load(
+        key: String,
+        loader: suspend CoroutineScope.() -> Unit,
+    ) = coroutineScope {
         jobsMutex.withLock {
             jobs.getOrPut(key) {
                 launch {

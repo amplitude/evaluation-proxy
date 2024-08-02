@@ -7,5 +7,5 @@ internal data class Deployment(
     val id: String,
     val projectId: String,
     val label: String,
-    val key: String
+    val key: String,
 )

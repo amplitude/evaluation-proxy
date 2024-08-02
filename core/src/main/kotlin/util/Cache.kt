@@ -9,15 +9,14 @@ import java.util.HashMap
  */
 internal class Cache<K, V>(
     private val capacity: Int,
-    private val ttlMillis: Long = 0
+    private val ttlMillis: Long = 0,
 ) {
-
     private class Node<K, V>(
         var key: K? = null,
         var value: V? = null,
         var prev: Node<K, V>? = null,
         var next: Node<K, V>? = null,
-        var ts: Long = System.currentTimeMillis()
+        var ts: Long = System.currentTimeMillis(),
     )
 
     private var count = 0
@@ -32,17 +31,21 @@ internal class Cache<K, V>(
         tail.prev = head
     }
 
-    suspend fun get(key: K): V? = mutex.withLock {
-        val n = map[key] ?: return null
-        if (timeout && n.ts + ttlMillis < System.currentTimeMillis()) {
-            removeNodeForKey(key)
-            return null
+    suspend fun get(key: K): V? =
+        mutex.withLock {
+            val n = map[key] ?: return null
+            if (timeout && n.ts + ttlMillis < System.currentTimeMillis()) {
+                removeNodeForKey(key)
+                return null
+            }
+            updateInternal(n)
+            return n.value
         }
-        updateInternal(n)
-        return n.value
-    }
 
-    suspend fun set(key: K, value: V) = mutex.withLock {
+    suspend fun set(
+        key: K,
+        value: V,
+    ) = mutex.withLock {
         var n = map[key]
         if (n == null) {
             n = Node(key, value)
@@ -62,9 +65,10 @@ internal class Cache<K, V>(
         }
     }
 
-    suspend fun remove(key: K): Unit = mutex.withLock {
-        removeNodeForKey(key)
-    }
+    suspend fun remove(key: K): Unit =
+        mutex.withLock {
+            removeNodeForKey(key)
+        }
 
     private fun removeNodeForKey(key: K) {
         val n = map[key] ?: return

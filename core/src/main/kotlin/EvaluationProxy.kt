@@ -30,15 +30,26 @@ import kotlin.time.toDuration
 
 const val EVALUATION_PROXY_VERSION = "0.4.7"
 
+class EvaluationProxyResponseException(
+    val response: EvaluationProxyResponse,
+) : Exception("Evaluation proxy response error: $response")
+
 data class EvaluationProxyResponse(
     val status: HttpStatusCode,
-    val body: String
+    val body: String,
 ) {
     companion object {
-        fun error(status: HttpStatusCode, message: String): EvaluationProxyResponse {
+        fun error(
+            status: HttpStatusCode,
+            message: String,
+        ): EvaluationProxyResponse {
             return EvaluationProxyResponse(status, message)
         }
-        inline fun <reified T> json(status: HttpStatusCode, response: T): EvaluationProxyResponse {
+
+        inline fun <reified T> json(
+            status: HttpStatusCode,
+            response: T,
+        ): EvaluationProxyResponse {
             return EvaluationProxyResponse(status, json.encodeToString<T>(response))
         }
     }
@@ -48,9 +59,8 @@ class EvaluationProxy internal constructor(
     private val projectConfigurations: List<ProjectConfiguration>,
     private val configuration: Configuration,
     private val projectStorage: ProjectStorage,
-    metricsHandler: MetricsHandler? = null,
+    metrics: MetricsHandler? = null,
 ) {
-
     constructor(
         projectConfigurations: List<ProjectConfiguration>,
         configuration: Configuration = Configuration(),
@@ -67,7 +77,7 @@ class EvaluationProxy internal constructor(
     }
 
     init {
-        Metrics.handler = metricsHandler
+        Metrics.handler = metrics
     }
 
     private val supervisor = SupervisorJob()
@@ -96,12 +106,13 @@ class EvaluationProxy internal constructor(
             val projectId = deployments.first().projectId
             log.info("Fetched ${deployments.size} deployments for project $projectId")
             // Add the project to local mappings.
-            val project = Project(
-                id = projectId,
-                apiKey = projectConfiguration.apiKey,
-                secretKey = projectConfiguration.secretKey,
-                managementKey = projectConfiguration.managementKey
-            )
+            val project =
+                Project(
+                    id = projectId,
+                    apiKey = projectConfiguration.apiKey,
+                    secretKey = projectConfiguration.secretKey,
+                    managementKey = projectConfiguration.managementKey,
+                )
             apiKeysToProject[project.apiKey] = project
             secretKeysToProject[project.secretKey] = project
             for (deployment in deployments) {
@@ -115,8 +126,9 @@ class EvaluationProxy internal constructor(
         /*
          * Update project storage with configured projects, and clean up
          * projects that have been removed.
+         *
+         * Add all configured projects to storage.
          */
-        // Add all configured projects to storage
         val projectIds = projectProxies.map { it.key.id }.toSet()
         for (projectId in projectIds) {
             log.debug("Adding project $projectId")
@@ -167,98 +179,151 @@ class EvaluationProxy internal constructor(
         log.info("Evaluation proxy started.")
     }
 
-    suspend fun shutdown() = coroutineScope {
-        log.info("Shutting down evaluation proxy.")
-        projectProxies.map { scope.launch { it.value.shutdown() } }.joinAll()
-        supervisor.cancelAndJoin()
-        log.info("Evaluation proxy shut down.")
-    }
+    suspend fun shutdown() =
+        coroutineScope {
+            log.info("Shutting down evaluation proxy.")
+            projectProxies.map { scope.launch { it.value.shutdown() } }.joinAll()
+            supervisor.cancelAndJoin()
+            log.info("Evaluation proxy shut down.")
+        }
 
     // Apis
 
-    suspend fun getFlagConfigs(
-        deploymentKey: String?
-    ): EvaluationProxyResponse {
-        val project = getProject(deploymentKey)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
-        val projectProxy = getProjectProxy(project)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.InternalServerError, "Project proxy not found for project.")
-        return projectProxy.getFlagConfigs(deploymentKey)
-    }
+    suspend fun getFlagConfigs(deploymentKey: String?): EvaluationProxyResponse =
+        Metrics.wrapRequestMetric({ EvaluationProxyGetFlagsRequest }, { EvaluationProxyGetFlagsRequestError(it) }) {
+            val project =
+                getProject(deploymentKey)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid deployment",
+                    )
+            val projectProxy =
+                getProjectProxy(project)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.InternalServerError,
+                        "Project proxy not found for project.",
+                    )
+            return@wrapRequestMetric projectProxy.getFlagConfigs(deploymentKey)
+        }
 
     suspend fun getCohort(
         apiKey: String?,
         secretKey: String?,
         cohortId: String?,
         lastModified: Long?,
-        maxCohortSize: Int?
-    ): EvaluationProxyResponse {
-        val project = getProject(apiKey, secretKey)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid api or secret key")
-        val projectProxy = getProjectProxy(project)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.InternalServerError, "Project proxy not found for project.")
-        return projectProxy.getCohort(cohortId, lastModified, maxCohortSize)
-    }
+        maxCohortSize: Int?,
+    ): EvaluationProxyResponse =
+        Metrics.wrapRequestMetric({ EvaluationProxyGetCohortRequest }, { EvaluationProxyGetCohortRequestError(it) }) {
+            val project =
+                getProject(apiKey, secretKey)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid api or secret key",
+                    )
+            val projectProxy =
+                getProjectProxy(project)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.InternalServerError,
+                        "Project proxy not found for project.",
+                    )
+            return@wrapRequestMetric projectProxy.getCohort(cohortId, lastModified, maxCohortSize)
+        }
 
     suspend fun getCohortMemberships(
         deploymentKey: String?,
         groupType: String?,
-        groupName: String?
-    ): EvaluationProxyResponse {
-        val project = getProject(deploymentKey)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
-        val projectProxy = getProjectProxy(project)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.InternalServerError, "Project proxy not found for project.")
-        return projectProxy.getCohortMemberships(deploymentKey, groupType, groupName)
-    }
+        groupName: String?,
+    ): EvaluationProxyResponse =
+        Metrics.wrapRequestMetric({ EvaluationProxyGetMembershipsRequest }, { EvaluationProxyGetMembershipsRequestError(it) }) {
+            val project =
+                getProject(deploymentKey)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid deployment",
+                    )
+            val projectProxy =
+                getProjectProxy(project)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.InternalServerError,
+                        "Project proxy not found for project.",
+                    )
+            return@wrapRequestMetric projectProxy.getCohortMemberships(deploymentKey, groupType, groupName)
+        }
 
     suspend fun evaluate(
         deploymentKey: String?,
         user: Map<String, Any?>?,
-        flagKeys: Set<String>? = null
-    ): EvaluationProxyResponse {
-        val project = getProject(deploymentKey)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
-        val projectProxy = getProjectProxy(project)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.InternalServerError, "Project proxy not found for project.")
-        return Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-            projectProxy.evaluate(deploymentKey, user, flagKeys)
+        flagKeys: Set<String>? = null,
+    ): EvaluationProxyResponse =
+        Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
+            val project =
+                getProject(deploymentKey)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid deployment",
+                    )
+            val projectProxy =
+                getProjectProxy(project)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.InternalServerError,
+                        "Project proxy not found for project.",
+                    )
+            return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
+                projectProxy.evaluate(deploymentKey, user, flagKeys)
+            }
         }
-    }
 
     suspend fun evaluateV1(
         deploymentKey: String?,
         user: Map<String, Any?>?,
-        flagKeys: Set<String>? = null
-    ): EvaluationProxyResponse {
-        val project = getProject(deploymentKey)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
-        val projectProxy = getProjectProxy(project)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.InternalServerError, "Project proxy not found for project.")
-        return Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-            projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+        flagKeys: Set<String>? = null,
+    ): EvaluationProxyResponse =
+        Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
+            val project =
+                getProject(deploymentKey)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid deployment",
+                    )
+            val projectProxy =
+                getProjectProxy(project)
+                    ?: return@wrapRequestMetric EvaluationProxyResponse.error(
+                        HttpStatusCode.InternalServerError,
+                        "Project proxy not found for project.",
+                    )
+            return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
+                projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+            }
         }
-    }
 
     // Private
 
     private suspend fun getProject(deploymentKey: String?): Project? {
-        val project = mutex.withLock {
-            deploymentKeysToProject[deploymentKey]
-        }
+        val project =
+            mutex.withLock {
+                deploymentKeysToProject[deploymentKey]
+            }
         if (project == null) {
-            log.warn("Unable to find project for deployment {}. Current mappings: {}", deploymentKey, deploymentKeysToProject.mapValues { it.value.id })
+            log.warn(
+                "Unable to find project for deployment {}. Current mappings: {}",
+                deploymentKey,
+                deploymentKeysToProject.mapValues { it.value.id },
+            )
             return null
         }
         return project
     }
 
-    private suspend fun getProject(apiKey: String?, secretKey: String?): Project? {
-        val project = mutex.withLock {
-            apiKeysToProject[apiKey]
-        }
+    private suspend fun getProject(
+        apiKey: String?,
+        secretKey: String?,
+    ): Project? {
+        val project =
+            mutex.withLock {
+                apiKeysToProject[apiKey]
+            }
         if (project == null) {
-            log.warn("Unable to find project for deployment {}. Current mappings: {}", apiKey, apiKeysToProject.mapValues { it.value.id })
+            log.warn("Unable to find project for api key {}. Current mappings: {}", apiKey, apiKeysToProject.mapValues { it.value.id })
             return null
         }
         if (project.secretKey != secretKey) {
@@ -280,29 +345,31 @@ class EvaluationProxy internal constructor(
     internal fun createProjectApi(managementKey: String): ProjectApi {
         return ProjectApiV1(
             configuration.managementServerUrl,
-            managementKey
+            managementKey,
         )
     }
 
     @VisibleForTesting
     internal fun createProjectProxy(project: Project): ProjectProxy {
-        val assignmentTracker = AmplitudeAssignmentTracker(
-            project.apiKey,
-            configuration.analyticsServerUrl,
-            configuration.assignment
-        )
+        val assignmentTracker =
+            AmplitudeAssignmentTracker(
+                project.apiKey,
+                configuration.analyticsServerUrl,
+                configuration.assignment,
+            )
         val deploymentStorage = getDeploymentStorage(project.id, configuration.redis)
-        val cohortStorage = getCohortStorage(
-            project.id,
-            configuration.redis,
-            configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
-        )
+        val cohortStorage =
+            getCohortStorage(
+                project.id,
+                configuration.redis,
+                configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS),
+            )
         return ProjectProxy(
             project,
             configuration,
             assignmentTracker,
             deploymentStorage,
-            cohortStorage
+            cohortStorage,
         )
     }
 
@@ -316,7 +383,23 @@ class EvaluationProxy internal constructor(
         return getCohortStorage(
             projectId,
             configuration.redis,
-            configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS)
+            configuration.cohortSyncIntervalMillis.toDuration(DurationUnit.MILLISECONDS),
         )
+    }
+
+    private suspend fun Metrics.wrapRequestMetric(
+        metric: (() -> Metric)?,
+        failure: ((e: Exception) -> FailureMetric)?,
+        block: suspend () -> EvaluationProxyResponse,
+    ): EvaluationProxyResponse {
+        track(EvaluationProxyRequest)
+        metric?.invoke()
+        val response = block()
+        if (response.status.value >= 400) {
+            val exception = EvaluationProxyResponseException(response)
+            track(EvaluationProxyRequestError(exception))
+            failure?.invoke(exception)
+        }
+        return response
     }
 }

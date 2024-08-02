@@ -1,6 +1,9 @@
 package com.amplitude.deployment
 
 import com.amplitude.EVALUATION_PROXY_VERSION
+import com.amplitude.FlagsFetch
+import com.amplitude.FlagsFetchFailure
+import com.amplitude.Metrics
 import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.RetryConfig
 import com.amplitude.util.get
@@ -21,9 +24,8 @@ internal interface DeploymentApi {
 internal class DeploymentApiV2(
     private val serverUrl: String,
     engine: HttpClientEngine = OkHttp.create(),
-    private val retryConfig: RetryConfig = RetryConfig()
+    private val retryConfig: RetryConfig = RetryConfig(),
 ) : DeploymentApi {
-
     companion object {
         val log by logger()
     }
@@ -32,18 +34,21 @@ internal class DeploymentApiV2(
 
     override suspend fun getFlagConfigs(deploymentKey: String): List<EvaluationFlag> {
         log.trace("getFlagConfigs: start - deploymentKey=$deploymentKey")
-        val response = retry(
-            config = retryConfig,
-            onFailure = { e -> log.error("Get flag configs failed: $e") }
-        ) {
-            client.get(serverUrl, "/sdk/v2/flags") {
-                parameter("v", "0")
-                headers {
-                    set("Authorization", "Api-Key $deploymentKey")
-                    set("X-Amp-Exp-Library", "evaluation-proxy/$EVALUATION_PROXY_VERSION")
+        val response =
+            Metrics.with({ FlagsFetch }, { e -> FlagsFetchFailure(e) }) {
+                retry(
+                    config = retryConfig,
+                    onFailure = { e -> log.error("Get flag configs failed: $e") },
+                ) {
+                    client.get(serverUrl, "/sdk/v2/flags") {
+                        parameter("v", "0")
+                        headers {
+                            set("Authorization", "Api-Key $deploymentKey")
+                            set("X-Amp-Exp-Library", "evaluation-proxy/$EVALUATION_PROXY_VERSION")
+                        }
+                    }
                 }
             }
-        }
         return json.decodeFromString<List<EvaluationFlag>>(response.body()).also {
             log.trace("getFlagConfigs: end - deploymentKey=$deploymentKey")
         }

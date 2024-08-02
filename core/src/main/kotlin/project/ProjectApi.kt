@@ -20,7 +20,7 @@ private const val MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
 
 @Serializable
 internal data class DeploymentsResponse(
-    val deployments: List<SerialDeployment>
+    val deployments: List<SerialDeployment>,
 )
 
 @Serializable
@@ -29,7 +29,7 @@ internal data class SerialDeployment(
     val projectId: String,
     val label: String,
     val key: String,
-    val deleted: Boolean
+    val deleted: Boolean,
 )
 
 private fun SerialDeployment.toDeployment(): Deployment? {
@@ -44,32 +44,34 @@ internal interface ProjectApi {
 internal class ProjectApiV1(
     private val serverUrl: String,
     private val managementKey: String,
-    engine: HttpClientEngine = OkHttp.create()
+    engine: HttpClientEngine = OkHttp.create(),
 ) : ProjectApi {
-
     companion object {
         val log by logger()
     }
 
-    private val client = HttpClient(engine) {
-        install(HttpTimeout) {
-            socketTimeoutMillis = 30000
+    private val client =
+        HttpClient(engine) {
+            install(HttpTimeout) {
+                socketTimeoutMillis = 30000
+            }
         }
-    }
 
     override suspend fun getDeployments(): List<Deployment> =
         Metrics.with({ DeploymentsFetch }, { e -> DeploymentsFetchFailure(e) }) {
             log.trace("getDeployments: start")
-            val response = retry(onFailure = { e -> log.error("Get deployments failed: $e") }) {
-                client.get(
-                    url = serverUrl,
-                    path = "api/1/deployments") {
-                    headers {
-                        set("Authorization", "Bearer $managementKey")
-                        set("Accept", "application/json")
+            val response =
+                retry(onFailure = { e -> log.error("Get deployments failed: $e") }) {
+                    client.get(
+                        url = serverUrl,
+                        path = "api/1/deployments",
+                    ) {
+                        headers {
+                            set("Authorization", "Bearer $managementKey")
+                            set("Accept", "application/json")
+                        }
                     }
                 }
-            }
             json.decodeFromString<DeploymentsResponse>(response.body())
                 .deployments
                 .mapNotNull { it.toDeployment() }

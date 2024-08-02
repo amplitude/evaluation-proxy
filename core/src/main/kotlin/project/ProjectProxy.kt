@@ -29,9 +29,8 @@ internal class ProjectProxy(
     configuration: Configuration,
     private val assignmentTracker: AssignmentTracker,
     private val deploymentStorage: DeploymentStorage,
-    private val cohortStorage: CohortStorage
+    private val cohortStorage: CohortStorage,
 ) {
-
     companion object {
         val log by logger()
     }
@@ -43,15 +42,16 @@ internal class ProjectProxy(
     private val cohortApi = CohortApiV1(configuration.cohortServerUrl, project.apiKey, project.secretKey)
     private val cohortLoader = CohortLoader(configuration.maxCohortSize, cohortApi, cohortStorage)
     private val deploymentLoader = DeploymentLoader(deploymentApi, deploymentStorage, cohortLoader)
-    private val projectRunner = ProjectRunner(
-        project,
-        configuration,
-        projectApi,
-        deploymentLoader,
-        deploymentStorage,
-        cohortLoader,
-        cohortStorage
-    )
+    private val projectRunner =
+        ProjectRunner(
+            project,
+            configuration,
+            projectApi,
+            deploymentLoader,
+            deploymentStorage,
+            cohortLoader,
+            cohortStorage,
+        )
 
     suspend fun start() {
         log.info("Starting project. projectId=${project.id}")
@@ -71,27 +71,37 @@ internal class ProjectProxy(
         return EvaluationProxyResponse.error(HttpStatusCode.OK, json.encodeToString(result))
     }
 
-    suspend fun getCohort(cohortId: String?, lastModified: Long?, maxCohortSize: Int?): EvaluationProxyResponse {
+    suspend fun getCohort(
+        cohortId: String?,
+        lastModified: Long?,
+        maxCohortSize: Int?,
+    ): EvaluationProxyResponse {
         if (cohortId.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort not found")
         }
-        val cohortDescription = cohortStorage.getCohort(cohortId)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort not found")
+        val cohortDescription =
+            cohortStorage.getCohort(cohortId)
+                ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort not found")
         if (cohortDescription.size > (maxCohortSize ?: Int.MAX_VALUE)) {
             return EvaluationProxyResponse.error(
                 HttpStatusCode.PayloadTooLarge,
-                "Cohort $cohortId sized ${cohortDescription.size} is greater than max cohort size $maxCohortSize"
+                "Cohort $cohortId sized ${cohortDescription.size} is greater than max cohort size $maxCohortSize",
             )
         }
         if (cohortDescription.lastModified == lastModified) {
             return EvaluationProxyResponse.error(HttpStatusCode.NoContent, "Cohort not modified")
         }
-        val cohort = cohortStorage.getCohort(cohortId)
-            ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort members not found")
+        val cohort =
+            cohortStorage.getCohort(cohortId)
+                ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort members not found")
         return EvaluationProxyResponse.json(HttpStatusCode.OK, GetCohortResponse.fromCohort(cohort))
     }
 
-    suspend fun getCohortMemberships(deploymentKey: String?, groupType: String?, groupName: String?): EvaluationProxyResponse {
+    suspend fun getCohortMemberships(
+        deploymentKey: String?,
+        groupType: String?,
+        groupName: String?,
+    ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
@@ -112,7 +122,7 @@ internal class ProjectProxy(
     suspend fun evaluate(
         deploymentKey: String?,
         user: Map<String, Any?>?,
-        flagKeys: Set<String>? = null
+        flagKeys: Set<String>? = null,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
@@ -124,23 +134,24 @@ internal class ProjectProxy(
     suspend fun evaluateV1(
         deploymentKey: String?,
         user: Map<String, Any?>?,
-        flagKeys: Set<String>? = null
+        flagKeys: Set<String>? = null,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
-        val result = evaluateInternal(deploymentKey, user, flagKeys).filter { entry ->
-            val default = entry.value.metadata?.get("default") as? Boolean ?: false
-            val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
-            (!default && deployed)
-        }
+        val result =
+            evaluateInternal(deploymentKey, user, flagKeys).filter { entry ->
+                val default = entry.value.metadata?.get("default") as? Boolean ?: false
+                val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
+                (!default && deployed)
+            }
         return EvaluationProxyResponse(HttpStatusCode.OK, json.encodeToString(result))
     }
 
     private suspend fun evaluateInternal(
         deploymentKey: String,
         user: Map<String, Any?>?,
-        flagKeys: Set<String>? = null
+        flagKeys: Set<String>? = null,
     ): Map<String, EvaluationVariant> {
         // Get flag configs for the deployment from storage and topo sort.
         val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
