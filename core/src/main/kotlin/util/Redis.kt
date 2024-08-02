@@ -3,7 +3,6 @@ package com.amplitude.util
 import com.amplitude.Metrics
 import com.amplitude.RedisCommand
 import com.amplitude.RedisCommandFailure
-import com.amplitude.cohort.CohortDescription
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisFuture
 import io.lettuce.core.RedisURI
@@ -14,7 +13,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.future.asDeferred
 import kotlin.time.Duration
 
-private const val STORAGE_PROTOCOL_VERSION = "v2"
+private const val STORAGE_PROTOCOL_VERSION = "v3"
 
 internal sealed class RedisKey(val value: String) {
 
@@ -39,8 +38,10 @@ internal sealed class RedisKey(val value: String) {
     data class CohortMembers(
         val prefix: String,
         val projectId: String,
-        val cohortDescription: CohortDescription
-    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:${cohortDescription.id}:${cohortDescription.groupType}:${cohortDescription.lastComputed}")
+        val cohortId: String,
+        val cohortGroupType: String,
+        val cohortLastModified: Long,
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:${cohortId}:${cohortGroupType}:${cohortLastModified}")
 }
 
 internal interface Redis {

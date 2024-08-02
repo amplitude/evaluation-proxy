@@ -76,8 +76,11 @@ data class ProjectConfiguration(
 @Serializable
 data class Configuration(
     val port: Int = Default.PORT,
-    val serverUrl: String = Default.SERVER_URL,
-    val cohortServerUrl: String = Default.COHORT_SERVER_URL,
+    val serverZone: String = Default.SERVER_ZONE,
+    val serverUrl: String = getServerUrl(serverZone),
+    val cohortServerUrl: String = getCohortServerUrl(serverZone),
+    val managementServerUrl: String = getManagementServerUrl(serverZone),
+    val analyticsServerUrl: String = getAnalyticsServerUrl(serverZone),
     val deploymentSyncIntervalMillis: Long = Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
     val flagSyncIntervalMillis: Long = Default.FLAG_SYNC_INTERVAL_MILLIS,
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
@@ -88,8 +91,11 @@ data class Configuration(
     companion object {
         fun fromEnv() = Configuration(
             port = intEnv(EnvKey.PORT, Default.PORT)!!,
-            serverUrl = stringEnv(EnvKey.SERVER_URL, Default.SERVER_URL)!!,
-            cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.COHORT_SERVER_URL)!!,
+            serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!,
+            serverUrl = stringEnv(EnvKey.SERVER_URL, Default.US_SERVER_URL)!!,
+            cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.US_COHORT_SERVER_URL)!!,
+            managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL, Default.US_MANAGEMENT_SERVER_URL)!!,
+            analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL, Default.US_ANALYTICS_SERVER_URL)!!,
             deploymentSyncIntervalMillis = longEnv(
                 EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
                 Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS
@@ -164,8 +170,11 @@ data class RedisConfiguration(
 
 object EnvKey {
     const val PORT = "AMPLITUDE_PORT"
+    const val SERVER_ZONE = "AMPLITUDE_SERVER_ZONE"
     const val SERVER_URL = "AMPLITUDE_SERVER_URL"
     const val COHORT_SERVER_URL = "AMPLITUDE_COHORT_SERVER_URL"
+    const val MANAGEMENT_SERVER_URL = "AMPLITUDE_MANAGEMENT_SERVER_URL"
+    const val ANALYTICS_SERVER_URL = "AMPLITUDE_ANALYTICS_SERVER_URL"
 
     const val API_KEY = "AMPLITUDE_API_KEY"
     const val SECRET_KEY = "AMPLITUDE_SECRET_KEY"
@@ -188,8 +197,15 @@ object EnvKey {
 
 object Default {
     const val PORT = 3546
-    const val SERVER_URL = "https://flag.lab.amplitude.com"
-    const val COHORT_SERVER_URL = "https://cohort.lab.amplitude.com"
+    const val SERVER_ZONE = "US"
+    const val US_SERVER_URL = "https://flag.lab.amplitude.com"
+    const val US_COHORT_SERVER_URL = "https://cohort-v2.lab.amplitude.com"
+    const val US_MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
+    const val US_ANALYTICS_SERVER_URL = "https://api2.amplitude.com/2/httpapi"
+    const val EU_SERVER_URL = "https://flag.lab.eu.amplitude.com"
+    const val EU_COHORT_SERVER_URL = "https://cohort-v2.lab.eu.amplitude.com"
+    const val EU_MANAGEMENT_SERVER_URL = "https://experiment.eu.amplitude.com"
+    const val EU_ANALYTICS_SERVER_URL = "https://api.eu.amplitude.com/2/httpapi"
     const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L
@@ -203,4 +219,36 @@ object Default {
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_PREFIX = "amplitude"
+}
+
+private fun getServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_SERVER_URL
+    } else {
+        Default.US_SERVER_URL
+    }
+}
+
+private fun getCohortServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_COHORT_SERVER_URL
+    } else {
+        Default.US_COHORT_SERVER_URL
+    }
+}
+
+private fun getManagementServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_MANAGEMENT_SERVER_URL
+    } else {
+        Default.US_MANAGEMENT_SERVER_URL
+    }
+}
+
+private fun getAnalyticsServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_ANALYTICS_SERVER_URL
+    } else {
+        Default.US_ANALYTICS_SERVER_URL
+    }
 }

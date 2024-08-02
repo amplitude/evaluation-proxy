@@ -8,6 +8,7 @@ import com.amplitude.util.userId
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.junit.Test
+import test.user
 
 class AssignmentServiceTest {
 

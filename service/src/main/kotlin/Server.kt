@@ -6,7 +6,6 @@ import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import com.amplitude.util.toAnyMap
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -110,66 +109,30 @@ fun Application.proxyServer() {
      * Configure endpoints.
      */
     routing {
+
         // Local Evaluation
 
         get("/sdk/v2/flags") {
             val deployment = this.call.request.getDeploymentKey()
-            val result = try {
-                evaluationProxy.getSerializedFlagConfigs(deployment)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val result = evaluationProxy.getFlagConfigs(deployment)
+            call.respond(result.status, result.body)
         }
 
-        get("/sdk/v2/cohorts/{cohortId}/description") {
-            val deployment = this.call.request.getDeploymentKey()
+        get("/sdk/v1/cohort/{cohortId}") {
+            val (apiKey, secretKey) = this.call.request.getApiAndSecretKey()
             val cohortId = this.call.parameters["cohortId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortDescription(deployment, cohortId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val maxCohortSize = this.call.request.queryParameters["maxCohortSize"]?.toIntOrNull()
+            val lastModified = this.call.request.queryParameters["lastModified"]?.toLongOrNull()
+            val result = evaluationProxy.getCohort(apiKey, secretKey, cohortId, lastModified, maxCohortSize)
+            call.respond(result.status, result.body)
         }
 
-        get("/sdk/v2/cohorts/{cohortId}/members") {
-            val deployment = this.call.request.getDeploymentKey()
-            val cohortId = this.call.parameters["cohortId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembers(deployment, cohortId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
-        }
-
-        get("/sdk/v2/users/{userId}/cohorts") {
-            val deployment = this.call.request.getDeploymentKey()
-            val userId = this.call.parameters["userId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembershipsForUser(deployment, userId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
-        }
-
-        get("/sdk/v2/groups/{groupType}/{groupName}/cohorts") {
+        get("/sdk/v2/memberships/{groupType}/{groupName}") {
             val deployment = this.call.request.getDeploymentKey()
             val groupType = this.call.parameters["groupType"]
             val groupName = this.call.parameters["groupName"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembershipsForGroup(deployment, groupType, groupName)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val result = evaluationProxy.getCohortMemberships(deployment, groupType, groupName)
+            call.respond(result.status, result.body)
         }
 
         // Remote Evaluation V2 Endpoints
@@ -212,34 +175,24 @@ suspend fun ApplicationCall.evaluate(
     evaluationProxy: EvaluationProxy,
     userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
 ) {
-    val result = try {
-        // Deployment key is included in Authorization header with prefix "Api-Key "
-        val deploymentKey = request.getDeploymentKey()
-        val user = request.userProvider()
-        val flagKeys = request.getFlagKeys()
-        evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-    } catch (e: HttpErrorResponseException) {
-        respond(HttpStatusCode.fromValue(e.status), e.message)
-        return
-    }
-    respond(result)
+    // Deployment key is included in Authorization header with prefix "Api-Key "
+    val deploymentKey = request.getDeploymentKey()
+    val user = request.userProvider()
+    val flagKeys = request.getFlagKeys()
+    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys)
+    respond(result.status, result.body)
 }
 
 suspend fun ApplicationCall.evaluateV1(
     evaluationProxy: EvaluationProxy,
     userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
 ) {
-    val result = try {
-        // Deployment key is included in Authorization header with prefix "Api-Key "
-        val deploymentKey = request.getDeploymentKey()
-        val user = request.userProvider()
-        val flagKeys = request.getFlagKeys()
-        evaluationProxy.serializedEvaluateV1(deploymentKey, user, flagKeys)
-    } catch (e: HttpErrorResponseException) {
-        respond(HttpStatusCode.fromValue(e.status), e.message)
-        return
-    }
-    respond(result)
+    // Deployment key is included in Authorization header with prefix "Api-Key "
+    val deploymentKey = request.getDeploymentKey()
+    val user = request.userProvider()
+    val flagKeys = request.getFlagKeys()
+    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys)
+    respond(result.status, result.body)
 }
 
 /**
@@ -251,6 +204,21 @@ private fun ApplicationRequest.getDeploymentKey(): String? {
         return null
     }
     return deploymentKey.substring("Api-Key ".length)
+}
+
+/**
+ * Get the API and secret key from the request, included in Authorization header as Basic auth.
+ */
+private fun ApplicationRequest.getApiAndSecretKey(): Pair<String?, String?> {
+    val authHeaderValue = this.headers["Authorization"]
+    if (authHeaderValue == null || !authHeaderValue.startsWith("Basic", ignoreCase = true)) {
+        return null to null
+    }
+    val segmentedAuthValue = authHeaderValue.substring("Basic ".length).split(":")
+    if (segmentedAuthValue.size < 2) {
+        return null to null
+    }
+    return segmentedAuthValue[0] to segmentedAuthValue[1]
 }
 
 /**

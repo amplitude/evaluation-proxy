@@ -25,27 +25,28 @@ internal data class RetryConfig(
 internal suspend fun retry(
     config: RetryConfig = RetryConfig(),
     onFailure: (Exception) -> Unit = {},
+    acceptCodes: Set<HttpStatusCode> = emptySet(),
     block: suspend () -> HttpResponse
 ): HttpResponse {
     var currentDelay = config.initialDelayMillis
     var error: Exception? = null
-    for (i in 0..config.times) {
+    for (i in 0..<config.times) {
         try {
             val response = block()
-            if (response.status.value in 100..399) {
+            if (response.status.value in 100..399 || acceptCodes.contains(response.status)) {
                 return response
             } else {
                 throw HttpErrorException(response.status, response)
             }
-        } catch (e: HttpErrorException) {
-            val code = e.statusCode.value
-            onFailure(e)
-            if (code != 429 && code in 400..499) {
-                throw e
-            }
         } catch (e: Exception) {
             onFailure(e)
             error = e
+            if (e is HttpErrorException) {
+                val code = e.statusCode.value
+                if (code != 429 && code in 400..499) {
+                    throw e
+                }
+            }
         }
         delay(currentDelay)
         currentDelay = (currentDelay * config.factor).toLong().coerceAtMost(config.maxDelay)

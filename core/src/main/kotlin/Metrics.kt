@@ -1,5 +1,7 @@
 package com.amplitude
 
+import com.amplitude.project.InMemoryProjectStorage
+
 sealed class Metric
 sealed class FailureMetric : Metric()
 
@@ -17,8 +19,6 @@ data object DeploymentsFetch : Metric()
 data class DeploymentsFetchFailure(val exception: Exception) : FailureMetric()
 data object FlagsFetch : Metric()
 data class FlagsFetchFailure(val exception: Exception) : FailureMetric()
-data object CohortDescriptionFetch : Metric()
-data class CohortDescriptionFetchFailure(val exception: Exception) : FailureMetric()
 data object CohortDownload : Metric()
 data class CohortDownloadFailure(val exception: Exception) : FailureMetric()
 data object RedisCommand : Metric()

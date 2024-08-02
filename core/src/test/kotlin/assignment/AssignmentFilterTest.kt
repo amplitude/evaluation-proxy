@@ -5,6 +5,7 @@ import com.amplitude.util.toEvaluationContext
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.junit.Test
+import test.user
 
 class AssignmentFilterTest {
 

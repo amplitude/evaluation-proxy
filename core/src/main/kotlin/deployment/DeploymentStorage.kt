@@ -129,6 +129,7 @@ internal class RedisDeploymentStorage(
 
     override suspend fun removeDeployment(deploymentKey: String) {
         redis.hdel(RedisKey.Deployments(prefix, projectId), deploymentKey)
+        removeAllFlags(deploymentKey)
     }
 
     override suspend fun getFlag(deploymentKey: String, flagKey: String): EvaluationFlag? {
