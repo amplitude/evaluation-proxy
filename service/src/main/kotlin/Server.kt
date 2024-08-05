@@ -198,7 +198,8 @@ suspend fun ApplicationCall.evaluateV1(
 }
 
 /**
- * Get the deployment key from the request, included in Authorization header with prefix "Api-Key "
+ * Get the deployment key from the request, included in Authorization header
+ * with prefix "Api-Key "
  */
 private fun ApplicationRequest.getDeploymentKey(): String? {
     val deploymentKey = this.headers["Authorization"]
@@ -209,7 +210,8 @@ private fun ApplicationRequest.getDeploymentKey(): String? {
 }
 
 /**
- * Get the API and secret key from the request, included in Authorization header as Basic auth.
+ * Get the API and secret key from the request, included in Authorization
+ * header as Basic auth.
  */
 private fun ApplicationRequest.getApiAndSecretKey(): Pair<String?, String?> {
     val authHeaderValue = this.headers["Authorization"]
