@@ -10,7 +10,7 @@ internal const val DAY_MILLIS: Long = 24 * 60 * 60 * 1000
 internal data class Assignment(
     val context: EvaluationContext,
     val results: Map<String, EvaluationVariant>,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
 )
 
 internal fun Assignment.canonicalize(): String {

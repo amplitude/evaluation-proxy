@@ -11,39 +11,55 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal class DeploymentRunner(
-    @Volatile var configuration: Configuration,
+    private val configuration: Configuration,
     private val deploymentKey: String,
-    private val deploymentApi: DeploymentApi,
+    private val cohortLoader: CohortLoader,
     private val deploymentStorage: DeploymentStorage,
-    private val cohortLoader: CohortLoader
+    private val deploymentLoader: DeploymentLoader,
 ) {
-
     companion object {
         val log by logger()
     }
 
     private val supervisor = SupervisorJob()
     private val scope = CoroutineScope(supervisor)
-    private val deploymentLoader = DeploymentLoader(deploymentApi, deploymentStorage, cohortLoader)
 
     suspend fun start() {
         log.trace("start: - deploymentKey=$deploymentKey")
-        deploymentLoader.loadDeployment(deploymentKey)
+        val job =
+            scope.launch {
+                try {
+                    deploymentLoader.loadDeployment(deploymentKey)
+                } catch (t: Throwable) {
+                    // Catch failure and continue to run pollers. Assume deployment
+                    // load will eventually succeed.
+                    log.error("Load failed for deployment $deploymentKey", t)
+                }
+            }
         // Periodic flag config loader
         scope.launch {
             while (true) {
                 delay(configuration.flagSyncIntervalMillis)
-                deploymentLoader.loadDeployment(deploymentKey)
+                try {
+                    deploymentLoader.loadDeployment(deploymentKey)
+                } catch (t: Throwable) {
+                    log.error("Periodic deployment load failed for deployment $deploymentKey", t)
+                }
             }
         }
         // Periodic cohort refresher
         scope.launch {
             while (true) {
                 delay(configuration.cohortSyncIntervalMillis)
-                val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getAllCohortIds()
-                cohortLoader.loadCohorts(cohortIds)
+                try {
+                    val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getAllCohortIds()
+                    cohortLoader.loadCohorts(cohortIds)
+                } catch (t: Throwable) {
+                    log.error("Periodic cohort load failed for deployment $deploymentKey", t)
+                }
             }
         }
+        job.join()
     }
 
     suspend fun stop() {

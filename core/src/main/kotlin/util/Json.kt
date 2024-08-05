@@ -16,30 +16,33 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 
-val json = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    coerceInputValues = true
-    explicitNulls = false
-}
+val json =
+    Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+        explicitNulls = false
+    }
 
-internal fun Any?.toJsonElement(): JsonElement = when (this) {
-    null -> JsonNull
-    is Map<*, *> -> toJsonObject()
-    is Collection<*> -> toJsonArray()
-    is Boolean -> JsonPrimitive(this)
-    is Number -> JsonPrimitive(this)
-    is String -> JsonPrimitive(this)
-    else -> JsonPrimitive(toString())
-}
+internal fun Any?.toJsonElement(): JsonElement =
+    when (this) {
+        null -> JsonNull
+        is Map<*, *> -> toJsonObject()
+        is Collection<*> -> toJsonArray()
+        is Boolean -> JsonPrimitive(this)
+        is Number -> JsonPrimitive(this)
+        is String -> JsonPrimitive(this)
+        else -> JsonPrimitive(toString())
+    }
 
 internal fun Collection<*>.toJsonArray(): JsonArray = JsonArray(map { it.toJsonElement() })
 
-internal fun Map<*, *>.toJsonObject(): JsonObject = JsonObject(
-    mapNotNull {
-        (it.key as? String ?: return@mapNotNull null) to it.value.toJsonElement()
-    }.toMap()
-)
+internal fun Map<*, *>.toJsonObject(): JsonObject =
+    JsonObject(
+        mapNotNull {
+            (it.key as? String ?: return@mapNotNull null) to it.value.toJsonElement()
+        }.toMap(),
+    )
 
 internal fun JsonElement.toAny(): Any? {
     return when (this) {
@@ -66,7 +69,10 @@ internal object AnySerializer : KSerializer<Any?> {
     override val descriptor: SerialDescriptor
         get() = SerialDescriptor("Any", delegate.descriptor)
 
-    override fun serialize(encoder: Encoder, value: Any?) {
+    override fun serialize(
+        encoder: Encoder,
+        value: Any?,
+    ) {
         val jsonElement = value.toJsonElement()
         encoder.encodeSerializableValue(delegate, jsonElement)
     }

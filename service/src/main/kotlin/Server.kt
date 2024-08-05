@@ -6,7 +6,6 @@ import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import com.amplitude.util.toAnyMap
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -45,30 +44,33 @@ fun main() {
     log.info("Accessing proxy configuration.")
     val proxyConfigFilePath = stringEnv("PROXY_CONFIG_FILE_PATH", "/etc/evaluation-proxy-config.yaml")!!
     val proxyProjectsFilePath = stringEnv("PROXY_PROJECTS_FILE_PATH", proxyConfigFilePath)!!
-    val projectsFile = try {
-        ProjectsFile.fromFile(proxyProjectsFilePath).also {
-            log.info("Found projects file at $proxyProjectsFilePath")
+    val projectsFile =
+        try {
+            ProjectsFile.fromFile(proxyProjectsFilePath).also {
+                log.info("Found projects file at $proxyProjectsFilePath")
+            }
+        } catch (file: FileNotFoundException) {
+            log.info("Proxy projects file not found at $proxyProjectsFilePath, reading project from env.")
+            ProjectsFile.fromEnv()
         }
-    } catch (file: FileNotFoundException) {
-        log.info("Proxy projects file not found at $proxyProjectsFilePath, reading project from env.")
-        ProjectsFile.fromEnv()
-    }
-    val configFile = try {
-        ConfigurationFile.fromFile(proxyConfigFilePath).also {
-            log.info("Found configuration file at $proxyConfigFilePath")
+    val configFile =
+        try {
+            ConfigurationFile.fromFile(proxyConfigFilePath).also {
+                log.info("Found configuration file at $proxyConfigFilePath")
+            }
+        } catch (file: FileNotFoundException) {
+            log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
+            ConfigurationFile.fromEnv()
         }
-    } catch (file: FileNotFoundException) {
-        log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
-        ConfigurationFile.fromEnv()
-    }
 
     /*
      * Initialize and start the evaluation proxy.
      */
-    evaluationProxy = EvaluationProxy(
-        projectsFile.projects,
-        configFile.configuration
-    )
+    evaluationProxy =
+        EvaluationProxy(
+            projectsFile.projects,
+            configFile.configuration,
+        )
 
     /*
      * Start the server.
@@ -77,7 +79,7 @@ fun main() {
         factory = Netty,
         port = configFile.configuration.port,
         host = "0.0.0.0",
-        module = Application::proxyServer
+        module = Application::proxyServer,
     ).start(wait = true)
 }
 
@@ -103,7 +105,7 @@ fun Application.proxyServer() {
                     plugin.doShutdown(call)
                 }
             }
-        }
+        },
     )
 
     /*
@@ -114,62 +116,25 @@ fun Application.proxyServer() {
 
         get("/sdk/v2/flags") {
             val deployment = this.call.request.getDeploymentKey()
-            val result = try {
-                evaluationProxy.getSerializedFlagConfigs(deployment)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val result = evaluationProxy.getFlagConfigs(deployment)
+            call.respond(result.status, result.body)
         }
 
-        get("/sdk/v2/cohorts/{cohortId}/description") {
-            val deployment = this.call.request.getDeploymentKey()
+        get("/sdk/v1/cohort/{cohortId}") {
+            val (apiKey, secretKey) = this.call.request.getApiAndSecretKey()
             val cohortId = this.call.parameters["cohortId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortDescription(deployment, cohortId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val maxCohortSize = this.call.request.queryParameters["maxCohortSize"]?.toIntOrNull()
+            val lastModified = this.call.request.queryParameters["lastModified"]?.toLongOrNull()
+            val result = evaluationProxy.getCohort(apiKey, secretKey, cohortId, lastModified, maxCohortSize)
+            call.respond(result.status, result.body)
         }
 
-        get("/sdk/v2/cohorts/{cohortId}/members") {
-            val deployment = this.call.request.getDeploymentKey()
-            val cohortId = this.call.parameters["cohortId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembers(deployment, cohortId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
-        }
-
-        get("/sdk/v2/users/{userId}/cohorts") {
-            val deployment = this.call.request.getDeploymentKey()
-            val userId = this.call.parameters["userId"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembershipsForUser(deployment, userId)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
-        }
-
-        get("/sdk/v2/groups/{groupType}/{groupName}/cohorts") {
+        get("/sdk/v2/memberships/{groupType}/{groupName}") {
             val deployment = this.call.request.getDeploymentKey()
             val groupType = this.call.parameters["groupType"]
             val groupName = this.call.parameters["groupName"]
-            val result = try {
-                evaluationProxy.getSerializedCohortMembershipsForGroup(deployment, groupType, groupName)
-            } catch (e: HttpErrorResponseException) {
-                call.respond(HttpStatusCode.fromValue(e.status), e.message)
-                return@get
-            }
-            call.respond(result)
+            val result = evaluationProxy.getCohortMemberships(deployment, groupType, groupName)
+            call.respond(result.status, result.body)
         }
 
         // Remote Evaluation V2 Endpoints
@@ -210,36 +175,26 @@ fun Application.proxyServer() {
 
 suspend fun ApplicationCall.evaluate(
     evaluationProxy: EvaluationProxy,
-    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
+    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
-    val result = try {
-        // Deployment key is included in Authorization header with prefix "Api-Key "
-        val deploymentKey = request.getDeploymentKey()
-        val user = request.userProvider()
-        val flagKeys = request.getFlagKeys()
-        evaluationProxy.serializedEvaluate(deploymentKey, user, flagKeys)
-    } catch (e: HttpErrorResponseException) {
-        respond(HttpStatusCode.fromValue(e.status), e.message)
-        return
-    }
-    respond(result)
+    // Deployment key is included in Authorization header with prefix "Api-Key "
+    val deploymentKey = request.getDeploymentKey()
+    val user = request.userProvider()
+    val flagKeys = request.getFlagKeys()
+    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys)
+    respond(result.status, result.body)
 }
 
 suspend fun ApplicationCall.evaluateV1(
     evaluationProxy: EvaluationProxy,
-    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>
+    userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
-    val result = try {
-        // Deployment key is included in Authorization header with prefix "Api-Key "
-        val deploymentKey = request.getDeploymentKey()
-        val user = request.userProvider()
-        val flagKeys = request.getFlagKeys()
-        evaluationProxy.serializedEvaluateV1(deploymentKey, user, flagKeys)
-    } catch (e: HttpErrorResponseException) {
-        respond(HttpStatusCode.fromValue(e.status), e.message)
-        return
-    }
-    respond(result)
+    // Deployment key is included in Authorization header with prefix "Api-Key "
+    val deploymentKey = request.getDeploymentKey()
+    val user = request.userProvider()
+    val flagKeys = request.getFlagKeys()
+    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys)
+    respond(result.status, result.body)
 }
 
 /**
@@ -251,6 +206,21 @@ private fun ApplicationRequest.getDeploymentKey(): String? {
         return null
     }
     return deploymentKey.substring("Api-Key ".length)
+}
+
+/**
+ * Get the API and secret key from the request, included in Authorization header as Basic auth.
+ */
+private fun ApplicationRequest.getApiAndSecretKey(): Pair<String?, String?> {
+    val authHeaderValue = this.headers["Authorization"]
+    if (authHeaderValue == null || !authHeaderValue.startsWith("Basic", ignoreCase = true)) {
+        return null to null
+    }
+    val segmentedAuthValue = authHeaderValue.substring("Basic ".length).split(":")
+    if (segmentedAuthValue.size < 2) {
+        return null to null
+    }
+    return segmentedAuthValue[0] to segmentedAuthValue[1]
 }
 
 /**
@@ -294,24 +264,27 @@ private fun ApplicationRequest.getUserFromQuery(): JsonObject {
     val userId = this.queryParameters["user_id"]
     val deviceId = this.queryParameters["device_id"]
     val context = this.queryParameters["context"]
-    var user: JsonObject = if (context != null) {
-        json.decodeFromString(context)
-    } else {
-        JsonObject(emptyMap())
-    }
+    var user: JsonObject =
+        if (context != null) {
+            json.decodeFromString(context)
+        } else {
+            JsonObject(emptyMap())
+        }
     if (userId != null) {
-        user = JsonObject(
-            user.toMutableMap().apply {
-                put("user_id", JsonPrimitive(userId))
-            }
-        )
+        user =
+            JsonObject(
+                user.toMutableMap().apply {
+                    put("user_id", JsonPrimitive(userId))
+                },
+            )
     }
     if (deviceId != null) {
-        user = JsonObject(
-            user.toMutableMap().apply {
-                put("device_id", JsonPrimitive(userId))
-            }
-        )
+        user =
+            JsonObject(
+                user.toMutableMap().apply {
+                    put("device_id", JsonPrimitive(userId))
+                },
+            )
     }
     return user
 }

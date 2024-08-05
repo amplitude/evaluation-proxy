@@ -5,7 +5,7 @@ lint:
 	./gradlew ktlintFormat
 
 run: build
-	PROXY_CONFIG_FILE_PATH=`pwd`/config.yaml ./gradlew run --console=plain
+	AMPLITUDE_LOG_LEVEL=DEBUG PROXY_CONFIG_FILE_PATH=`pwd`/config.yaml PROXY_PROJECTS_FILE_PATH=`pwd`/projects.yaml ./gradlew run --console=plain
 
 docker-build: build
 	docker build -t evaluation-proxy:local .

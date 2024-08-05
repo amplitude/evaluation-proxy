@@ -7,7 +7,6 @@ internal interface AssignmentFilter {
 }
 
 internal class InMemoryAssignmentFilter(size: Int) : AssignmentFilter {
-
     // Cache of canonical assignment to the last sent timestamp.
     private val cache = Cache<String, Unit>(size, DAY_MILLIS)
 

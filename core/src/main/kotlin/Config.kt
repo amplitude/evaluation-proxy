@@ -12,7 +12,7 @@ import java.io.File
 
 @Serializable
 data class ProjectsFile(
-    val projects: List<ProjectConfiguration>
+    val projects: List<ProjectConfiguration>,
 ) {
     companion object {
         fun fromEnv(): ProjectsFile {
@@ -35,10 +35,9 @@ data class ProjectsFile(
 
 @Serializable
 data class ConfigurationFile(
-    val configuration: Configuration = Configuration()
+    val configuration: Configuration = Configuration(),
 ) {
     companion object {
-
         fun fromEnv(): ConfigurationFile {
             val configuration = Configuration.fromEnv()
             return ConfigurationFile(configuration)
@@ -61,13 +60,16 @@ data class ConfigurationFile(
 data class ProjectConfiguration(
     val apiKey: String,
     val secretKey: String,
-    val managementKey: String
+    val managementKey: String,
 ) {
     companion object {
         fun fromEnv(): ProjectConfiguration {
             val apiKey = checkNotNull(stringEnv(EnvKey.API_KEY)) { "${EnvKey.API_KEY} environment variable must be set." }
             val secretKey = checkNotNull(stringEnv(EnvKey.SECRET_KEY)) { "${EnvKey.SECRET_KEY} environment variable must be set." }
-            val managementKey = checkNotNull(stringEnv(EnvKey.EXPERIMENT_MANAGEMENT_KEY)) { "${EnvKey.EXPERIMENT_MANAGEMENT_KEY} environment variable must be set." }
+            val managementKey =
+                checkNotNull(
+                    stringEnv(EnvKey.EXPERIMENT_MANAGEMENT_KEY),
+                ) { "${EnvKey.EXPERIMENT_MANAGEMENT_KEY} environment variable must be set." }
             return ProjectConfiguration(apiKey, secretKey, managementKey)
         }
     }
@@ -76,36 +78,46 @@ data class ProjectConfiguration(
 @Serializable
 data class Configuration(
     val port: Int = Default.PORT,
-    val serverUrl: String = Default.SERVER_URL,
-    val cohortServerUrl: String = Default.COHORT_SERVER_URL,
+    val serverZone: String = Default.SERVER_ZONE,
+    val serverUrl: String = getServerUrl(serverZone),
+    val cohortServerUrl: String = getCohortServerUrl(serverZone),
+    val managementServerUrl: String = getManagementServerUrl(serverZone),
+    val analyticsServerUrl: String = getAnalyticsServerUrl(serverZone),
     val deploymentSyncIntervalMillis: Long = Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
     val flagSyncIntervalMillis: Long = Default.FLAG_SYNC_INTERVAL_MILLIS,
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
     val assignment: AssignmentConfiguration = AssignmentConfiguration(),
-    val redis: RedisConfiguration? = null
+    val redis: RedisConfiguration? = null,
 ) {
     companion object {
-        fun fromEnv() = Configuration(
-            port = intEnv(EnvKey.PORT, Default.PORT)!!,
-            serverUrl = stringEnv(EnvKey.SERVER_URL, Default.SERVER_URL)!!,
-            cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.COHORT_SERVER_URL)!!,
-            deploymentSyncIntervalMillis = longEnv(
-                EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
-                Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS
-            )!!,
-            flagSyncIntervalMillis = longEnv(
-                EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
-                Default.FLAG_SYNC_INTERVAL_MILLIS
-            )!!,
-            cohortSyncIntervalMillis = longEnv(
-                EnvKey.COHORT_SYNC_INTERVAL_MILLIS,
-                Default.COHORT_SYNC_INTERVAL_MILLIS
-            )!!,
-            maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
-            assignment = AssignmentConfiguration.fromEnv(),
-            redis = RedisConfiguration.fromEnv()
-        )
+        fun fromEnv() =
+            Configuration(
+                port = intEnv(EnvKey.PORT, Default.PORT)!!,
+                serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!,
+                serverUrl = stringEnv(EnvKey.SERVER_URL, Default.US_SERVER_URL)!!,
+                cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.US_COHORT_SERVER_URL)!!,
+                managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL, Default.US_MANAGEMENT_SERVER_URL)!!,
+                analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL, Default.US_ANALYTICS_SERVER_URL)!!,
+                deploymentSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
+                        Default.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                flagSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.FLAG_SYNC_INTERVAL_MILLIS,
+                        Default.FLAG_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                cohortSyncIntervalMillis =
+                    longEnv(
+                        EnvKey.COHORT_SYNC_INTERVAL_MILLIS,
+                        Default.COHORT_SYNC_INTERVAL_MILLIS,
+                    )!!,
+                maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
+                assignment = AssignmentConfiguration.fromEnv(),
+                redis = RedisConfiguration.fromEnv(),
+            )
     }
 }
 
@@ -114,27 +126,32 @@ data class AssignmentConfiguration(
     val filterCapacity: Int = Default.ASSIGNMENT_FILTER_CAPACITY,
     val eventUploadThreshold: Int = Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
     val eventUploadPeriodMillis: Int = Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
-    val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE
+    val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE,
 ) {
     companion object {
-        fun fromEnv() = AssignmentConfiguration(
-            filterCapacity = intEnv(
-                EnvKey.ASSIGNMENT_FILTER_CAPACITY,
-                Default.ASSIGNMENT_FILTER_CAPACITY
-            )!!,
-            eventUploadThreshold = intEnv(
-                EnvKey.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
-                Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD
-            )!!,
-            eventUploadPeriodMillis = intEnv(
-                EnvKey.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
-                Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS
-            )!!,
-            useBatchMode = booleanEnv(
-                EnvKey.ASSIGNMENT_USE_BATCH_MODE,
-                Default.ASSIGNMENT_USE_BATCH_MODE
+        fun fromEnv() =
+            AssignmentConfiguration(
+                filterCapacity =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_FILTER_CAPACITY,
+                        Default.ASSIGNMENT_FILTER_CAPACITY,
+                    )!!,
+                eventUploadThreshold =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
+                        Default.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD,
+                    )!!,
+                eventUploadPeriodMillis =
+                    intEnv(
+                        EnvKey.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
+                        Default.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS,
+                    )!!,
+                useBatchMode =
+                    booleanEnv(
+                        EnvKey.ASSIGNMENT_USE_BATCH_MODE,
+                        Default.ASSIGNMENT_USE_BATCH_MODE,
+                    ),
             )
-        )
     }
 }
 
@@ -142,7 +159,7 @@ data class AssignmentConfiguration(
 data class RedisConfiguration(
     val uri: String? = null,
     val readOnlyUri: String? = uri,
-    val prefix: String = Default.REDIS_PREFIX
+    val prefix: String = Default.REDIS_PREFIX,
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
@@ -153,7 +170,7 @@ data class RedisConfiguration(
                 RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
-                    prefix = redisPrefix
+                    prefix = redisPrefix,
                 )
             } else {
                 null
@@ -164,8 +181,11 @@ data class RedisConfiguration(
 
 object EnvKey {
     const val PORT = "AMPLITUDE_PORT"
+    const val SERVER_ZONE = "AMPLITUDE_SERVER_ZONE"
     const val SERVER_URL = "AMPLITUDE_SERVER_URL"
     const val COHORT_SERVER_URL = "AMPLITUDE_COHORT_SERVER_URL"
+    const val MANAGEMENT_SERVER_URL = "AMPLITUDE_MANAGEMENT_SERVER_URL"
+    const val ANALYTICS_SERVER_URL = "AMPLITUDE_ANALYTICS_SERVER_URL"
 
     const val API_KEY = "AMPLITUDE_API_KEY"
     const val SECRET_KEY = "AMPLITUDE_SECRET_KEY"
@@ -188,8 +208,15 @@ object EnvKey {
 
 object Default {
     const val PORT = 3546
-    const val SERVER_URL = "https://flag.lab.amplitude.com"
-    const val COHORT_SERVER_URL = "https://cohort.lab.amplitude.com"
+    const val SERVER_ZONE = "US"
+    const val US_SERVER_URL = "https://flag.lab.amplitude.com"
+    const val US_COHORT_SERVER_URL = "https://cohort-v2.lab.amplitude.com"
+    const val US_MANAGEMENT_SERVER_URL = "https://experiment.amplitude.com"
+    const val US_ANALYTICS_SERVER_URL = "https://api2.amplitude.com/2/httpapi"
+    const val EU_SERVER_URL = "https://flag.lab.eu.amplitude.com"
+    const val EU_COHORT_SERVER_URL = "https://cohort-v2.lab.eu.amplitude.com"
+    const val EU_MANAGEMENT_SERVER_URL = "https://experiment.eu.amplitude.com"
+    const val EU_ANALYTICS_SERVER_URL = "https://api.eu.amplitude.com/2/httpapi"
     const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L
@@ -203,4 +230,36 @@ object Default {
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_PREFIX = "amplitude"
+}
+
+private fun getServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_SERVER_URL
+    } else {
+        Default.US_SERVER_URL
+    }
+}
+
+private fun getCohortServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_COHORT_SERVER_URL
+    } else {
+        Default.US_COHORT_SERVER_URL
+    }
+}
+
+private fun getManagementServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_MANAGEMENT_SERVER_URL
+    } else {
+        Default.US_MANAGEMENT_SERVER_URL
+    }
+}
+
+private fun getAnalyticsServerUrl(zone: String): String {
+    return if (zone == "EU") {
+        Default.EU_ANALYTICS_SERVER_URL
+    } else {
+        Default.US_ANALYTICS_SERVER_URL
+    }
 }

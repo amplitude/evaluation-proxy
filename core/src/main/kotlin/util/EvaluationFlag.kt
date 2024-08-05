@@ -46,13 +46,14 @@ private fun EvaluationSegment.getGroupedCohortConditionIds(): Map<String, Mutabl
                 // Groups cohort selector is [context, groups, {group_type}, cohort_ids]
                 if (condition.selector.size > 2) {
                     val contextSubtype = condition.selector[1]
-                    val groupType = if (contextSubtype == "user") {
-                        USER_GROUP_TYPE
-                    } else if (condition.selector.contains("groups")) {
-                        condition.selector[2]
-                    } else {
-                        continue
-                    }
+                    val groupType =
+                        if (contextSubtype == "user") {
+                            USER_GROUP_TYPE
+                        } else if (condition.selector.contains("groups")) {
+                            condition.selector[2]
+                        } else {
+                            continue
+                        }
                     cohortIds.getOrPut(groupType) { mutableSetOf() } += condition.values
                 }
             }

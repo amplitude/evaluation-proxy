@@ -12,40 +12,41 @@ import kotlinx.coroutines.delay
 
 internal class HttpErrorException(
     val statusCode: HttpStatusCode,
-    response: HttpResponse? = null
+    response: HttpResponse? = null,
 ) : Exception("HTTP error response: code=$statusCode, message=${statusCode.description}, response=$response")
 
 internal data class RetryConfig(
     val times: Int = 8,
     val initialDelayMillis: Long = 100,
     val maxDelay: Long = 10000,
-    val factor: Double = 2.0
+    val factor: Double = 2.0,
 )
 
 internal suspend fun retry(
     config: RetryConfig = RetryConfig(),
     onFailure: (Exception) -> Unit = {},
-    block: suspend () -> HttpResponse
+    acceptCodes: Set<HttpStatusCode> = emptySet(),
+    block: suspend () -> HttpResponse,
 ): HttpResponse {
     var currentDelay = config.initialDelayMillis
     var error: Exception? = null
-    for (i in 0..config.times) {
+    for (i in 0..<config.times) {
         try {
             val response = block()
-            if (response.status.value in 100..399) {
+            if (response.status.value in 100..399 || acceptCodes.contains(response.status)) {
                 return response
             } else {
                 throw HttpErrorException(response.status, response)
             }
-        } catch (e: HttpErrorException) {
-            val code = e.statusCode.value
-            onFailure(e)
-            if (code != 429 && code in 400..499) {
-                throw e
-            }
         } catch (e: Exception) {
             onFailure(e)
             error = e
+            if (e is HttpErrorException) {
+                val code = e.statusCode.value
+                if (code != 429 && code in 400..499) {
+                    throw e
+                }
+            }
         }
         delay(currentDelay)
         currentDelay = (currentDelay * config.factor).toLong().coerceAtMost(config.maxDelay)
@@ -56,7 +57,7 @@ internal suspend fun retry(
 internal suspend fun HttpClient.get(
     url: String,
     path: String,
-    block: HttpRequestBuilder.() -> Unit
+    block: HttpRequestBuilder.() -> Unit,
 ): HttpResponse {
     return request(HttpMethod.Get, url, path, block)
 }
@@ -65,7 +66,7 @@ internal suspend fun HttpClient.request(
     method: HttpMethod,
     url: String,
     path: String,
-    block: HttpRequestBuilder.() -> Unit
+    block: HttpRequestBuilder.() -> Unit,
 ): HttpResponse {
     return request {
         this.method = method

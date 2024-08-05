@@ -1,11 +1,11 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.9.10"
-    kotlin("plugin.serialization") version "1.9.0"
+    kotlin("jvm") version "2.0.0"
+    kotlin("plugin.serialization") version "2.0.0"
     `maven-publish`
     signing
-    id("org.jlleitschuh.gradle.ktlint") version "11.3.1"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
 }
 
 java {
@@ -20,14 +20,17 @@ tasks {
 // Defined in gradle.properties
 val kotlinVersion: String by project
 val ktorVersion: String by project
+val coroutinesVersion: String by project
+val serializationVersion: String by project
 val experimentEvaluationVersion: String by project
 val amplitudeAnalytics: String by project
 val amplitudeAnalyticsJson: String by project
 val lettuce: String by project
-val apacheCommons: String by project
 val kaml: String by project
+val mockk: String by project
 
 dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
     implementation("com.amplitude:evaluation-core:$experimentEvaluationVersion")
     implementation("com.amplitude:java-sdk:$amplitudeAnalytics")
     implementation("org.json:json:$amplitudeAnalyticsJson")
@@ -35,8 +38,9 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
     implementation("com.charleskorn.kaml:kaml:$kaml")
-    implementation("org.apache.commons:commons-csv:$apacheCommons")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
+    testImplementation("io.mockk:mockk:$mockk")
+    testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
 }
 
 // Publishing

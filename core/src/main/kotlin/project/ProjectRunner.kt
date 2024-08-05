@@ -1,10 +1,9 @@
 package com.amplitude.project
 
 import com.amplitude.Configuration
-import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage
-import com.amplitude.deployment.DeploymentApi
+import com.amplitude.deployment.DeploymentLoader
 import com.amplitude.deployment.DeploymentRunner
 import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationFlag
@@ -14,21 +13,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.jetbrains.annotations.VisibleForTesting
 
 internal class ProjectRunner(
+    private val project: Project,
     private val configuration: Configuration,
     private val projectApi: ProjectApi,
-    private val deploymentApi: DeploymentApi,
+    private val deploymentLoader: DeploymentLoader,
     private val deploymentStorage: DeploymentStorage,
-    cohortApi: CohortApi,
-    private val cohortStorage: CohortStorage
+    private val cohortLoader: CohortLoader,
+    private val cohortStorage: CohortStorage,
 ) {
-
     companion object {
         val log by logger()
     }
@@ -37,18 +38,31 @@ internal class ProjectRunner(
     private val scope = CoroutineScope(supervisor)
 
     private val lock = Mutex()
-    private val deploymentRunners = mutableMapOf<String, DeploymentRunner>()
-    private val cohortLoader = CohortLoader(configuration.maxCohortSize, cohortApi, cohortStorage)
+
+    @VisibleForTesting
+    internal val deploymentRunners = mutableMapOf<String, DeploymentRunner>()
 
     suspend fun start() {
-        refresh()
+        val job =
+            scope.launch {
+                try {
+                    refresh()
+                } catch (t: Throwable) {
+                    log.error("Refresh failed for project ${project.id}", t)
+                }
+            }
         // Periodic deployment update and refresher
         scope.launch {
             while (true) {
                 delay(configuration.deploymentSyncIntervalMillis)
-                refresh()
+                try {
+                    refresh()
+                } catch (t: Throwable) {
+                    log.error("Periodic project refresh failed for project ${project.id}", t)
+                }
             }
         }
+        job.join()
     }
 
     suspend fun stop() {
@@ -60,40 +74,43 @@ internal class ProjectRunner(
         supervisor.cancelAndJoin()
     }
 
-    private suspend fun refresh() = lock.withLock {
-        log.trace("refresh: start")
-        // Get deployments from API and update the storage.
-        val networkDeployments = projectApi.getDeployments().associateBy { it.key }
-        val storageDeployments = deploymentStorage.getDeployments()
-        // Determine added and removed deployments
-        val addedDeployments = networkDeployments - storageDeployments.keys
-        val removedDeployments = storageDeployments - networkDeployments.keys
-        val startingDeployments = networkDeployments - deploymentRunners.keys
-        val jobs = mutableListOf<Job>()
-        for ((_, addedDeployment) in addedDeployments) {
-            log.info("Adding deployment $addedDeployment")
-            deploymentStorage.putDeployment(addedDeployment)
+    private suspend fun refresh() =
+        coroutineScope {
+            lock.withLock {
+                log.trace("refresh: start")
+                // Get deployments from API and update the storage.
+                val networkDeployments = projectApi.getDeployments().associateBy { it.key }
+                val storageDeployments = deploymentStorage.getDeployments()
+                // Determine added and removed deployments
+                val addedDeployments = networkDeployments - storageDeployments.keys
+                val removedDeployments = storageDeployments - networkDeployments.keys
+                val startingDeployments = networkDeployments - deploymentRunners.keys
+                val jobs = mutableListOf<Job>()
+                for ((_, addedDeployment) in addedDeployments) {
+                    log.info("Adding deployment $addedDeployment")
+                    deploymentStorage.putDeployment(addedDeployment)
+                }
+                for ((_, deployment) in startingDeployments) {
+                    jobs += scope.launch { addDeploymentInternal(deployment.key) }
+                }
+                for ((_, removedDeployment) in removedDeployments) {
+                    log.info("Removing deployment $removedDeployment")
+                    deploymentStorage.removeAllFlags(removedDeployment.key)
+                    deploymentStorage.removeDeployment(removedDeployment.key)
+                    jobs += scope.launch { removeDeploymentInternal(removedDeployment.key) }
+                }
+                // Keep cohorts which are targeted by all stored deployments.
+                removeUnusedCohorts(networkDeployments.keys)
+                jobs.joinAll()
+                log.debug(
+                    "Project refresh finished: addedDeployments={}, removedDeployments={}, startedDeployments={}",
+                    addedDeployments.keys,
+                    removedDeployments.keys,
+                    startingDeployments.keys,
+                )
+                log.trace("refresh: end")
+            }
         }
-        for ((_, deployment) in startingDeployments) {
-            jobs += scope.launch { addDeploymentInternal(deployment.key) }
-        }
-        for ((_, removedDeployment) in removedDeployments) {
-            log.info("Removing deployment $removedDeployment")
-            deploymentStorage.removeAllFlags(removedDeployment.key)
-            deploymentStorage.removeDeployment(removedDeployment.key)
-            jobs += scope.launch { removeDeploymentInternal(removedDeployment.key) }
-        }
-        jobs.joinAll()
-        // Keep cohorts which are targeted by all stored deployments.
-        removeUnusedCohorts(networkDeployments.keys)
-        log.debug(
-            "Project refresh finished: addedDeployments={}, removedDeployments={}, startedDeployments={}",
-            addedDeployments.keys,
-            removedDeployments.keys,
-            startingDeployments.keys
-        )
-        log.trace("refresh: end")
-    }
 
     // Must be run within lock
     private suspend fun addDeploymentInternal(deploymentKey: String) {
@@ -101,13 +118,14 @@ internal class ProjectRunner(
             return
         }
         log.debug("Adding and starting deployment runner for $deploymentKey")
-        val deploymentRunner = DeploymentRunner(
-            configuration,
-            deploymentKey,
-            deploymentApi,
-            deploymentStorage,
-            cohortLoader
-        )
+        val deploymentRunner =
+            DeploymentRunner(
+                configuration,
+                deploymentKey,
+                cohortLoader,
+                deploymentStorage,
+                deploymentLoader,
+            )
         deploymentRunner.start()
         deploymentRunners[deploymentKey] = deploymentRunner
     }
@@ -128,7 +146,7 @@ internal class ProjectRunner(
         for (cohortDescription in allStoredCohortDescriptions) {
             if (!allTargetedCohortIds.contains(cohortDescription.id)) {
                 log.info("Removing unused cohort $cohortDescription")
-                cohortStorage.removeCohort(cohortDescription)
+                cohortStorage.deleteCohort(cohortDescription)
             }
         }
     }

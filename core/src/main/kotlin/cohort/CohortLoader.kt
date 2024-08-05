@@ -1,63 +1,58 @@
 package com.amplitude.cohort
 
-import com.amplitude.CohortDescriptionFetch
-import com.amplitude.CohortDescriptionFetchFailure
 import com.amplitude.CohortDownload
 import com.amplitude.CohortDownloadFailure
 import com.amplitude.Metrics
+import com.amplitude.util.Loader
 import com.amplitude.util.logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 internal class CohortLoader(
-    @Volatile var maxCohortSize: Int,
+    private val maxCohortSize: Int,
     private val cohortApi: CohortApi,
-    private val cohortStorage: CohortStorage
+    private val cohortStorage: CohortStorage,
 ) {
-
     companion object {
         val log by logger()
     }
-    private val jobsMutex = Mutex()
-    private val jobs = mutableMapOf<String, Job>()
 
-    suspend fun loadCohorts(cohortIds: Set<String>) = coroutineScope {
-        val jobs = mutableListOf<Job>()
-        for (cohortId in cohortIds) {
-            jobs += launch { loadCohort(cohortId) }
+    private val loader = Loader()
+
+    suspend fun loadCohorts(cohortIds: Set<String>) =
+        coroutineScope {
+            val jobs = mutableListOf<Job>()
+            for (cohortId in cohortIds) {
+                jobs += launch { loadCohort(cohortId) }
+            }
+            jobs.joinAll()
         }
-        jobs.joinAll()
-    }
 
-    private suspend fun loadCohort(cohortId: String) = coroutineScope {
+    private suspend fun loadCohort(cohortId: String) {
         log.trace("loadCohort: start - cohortId={}", cohortId)
-        val networkCohort = Metrics.with(
-            { CohortDescriptionFetch },
-            { e -> CohortDescriptionFetchFailure(e) }
-        ) {
-            cohortApi.getCohortDescription(cohortId)
-        }
         val storageCohort = cohortStorage.getCohortDescription(cohortId)
-        val shouldDownloadCohort = networkCohort.size <= maxCohortSize &&
-            networkCohort.lastComputed > (storageCohort?.lastComputed ?: -1)
-        if (shouldDownloadCohort) {
-            jobsMutex.withLock {
-                jobs.getOrPut(cohortId) {
-                    launch {
-                        log.info("Downloading cohort. $networkCohort")
-                        val cohortMembers = Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
-                            cohortApi.getCohortMembers(networkCohort)
+        loader.load(cohortId) {
+            try {
+                val cohort =
+                    Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
+                        try {
+                            cohortApi.getCohort(cohortId, storageCohort?.lastModified, maxCohortSize)
+                        } catch (e: CohortNotModifiedException) {
+                            log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
+                            null
                         }
-                        cohortStorage.putCohort(networkCohort, cohortMembers)
-                        jobsMutex.withLock { jobs.remove(cohortId) }
-                        log.info("Cohort download complete. $networkCohort")
                     }
+                if (cohort != null) {
+                    cohortStorage.putCohort(cohort)
                 }
-            }.join()
+                log.info("Cohort download complete. {}", cohort ?: cohortId)
+            } catch (t: Throwable) {
+                // Don't throw if we fail to download the cohort. We
+                // prefer to continue to update flags.
+                log.error("Cohort download failed. $cohortId", t)
+            }
         }
         log.trace("loadCohort: end - cohortId={}", cohortId)
     }

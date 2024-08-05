@@ -5,6 +5,7 @@ import com.amplitude.experiment.evaluation.EvaluationContext
 internal fun EvaluationContext.userId(): String? {
     return (this["user"] as? Map<*, *>)?.get("user_id")?.toString()
 }
+
 internal fun EvaluationContext.deviceId(): String? {
     return (this["user"] as? Map<*, *>)?.get("device_id")?.toString()
 }
