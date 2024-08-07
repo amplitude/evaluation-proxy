@@ -6,6 +6,7 @@ import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import com.amplitude.util.toAnyMap
+import io.ktor.http.Headers
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -22,10 +23,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.util.decodeBase64String
 import io.ktor.util.toByteArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.annotations.VisibleForTesting
 import java.io.FileNotFoundException
 import java.util.Base64
 
@@ -115,13 +118,13 @@ fun Application.proxyServer() {
         // Local Evaluation
 
         get("/sdk/v2/flags") {
-            val deployment = this.call.request.getDeploymentKey()
+            val deployment = this.call.request.headers.getDeploymentKey()
             val result = evaluationProxy.getFlagConfigs(deployment)
             call.respond(result.status, result.body)
         }
 
         get("/sdk/v1/cohort/{cohortId}") {
-            val (apiKey, secretKey) = this.call.request.getApiAndSecretKey()
+            val (apiKey, secretKey) = this.call.request.headers.getApiAndSecretKey()
             val cohortId = this.call.parameters["cohortId"]
             val maxCohortSize = this.call.request.queryParameters["maxCohortSize"]?.toIntOrNull()
             val lastModified = this.call.request.queryParameters["lastModified"]?.toLongOrNull()
@@ -130,7 +133,7 @@ fun Application.proxyServer() {
         }
 
         get("/sdk/v2/memberships/{groupType}/{groupName}") {
-            val deployment = this.call.request.getDeploymentKey()
+            val deployment = this.call.request.headers.getDeploymentKey()
             val groupType = this.call.parameters["groupType"]
             val groupName = this.call.parameters["groupName"]
             val result = evaluationProxy.getCohortMemberships(deployment, groupType, groupName)
@@ -178,7 +181,7 @@ suspend fun ApplicationCall.evaluate(
     userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
     // Deployment key is included in Authorization header with prefix "Api-Key "
-    val deploymentKey = request.getDeploymentKey()
+    val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
     val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys)
@@ -190,7 +193,7 @@ suspend fun ApplicationCall.evaluateV1(
     userProvider: suspend ApplicationRequest.() -> Map<String, Any?>,
 ) {
     // Deployment key is included in Authorization header with prefix "Api-Key "
-    val deploymentKey = request.getDeploymentKey()
+    val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
     val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys)
@@ -201,8 +204,9 @@ suspend fun ApplicationCall.evaluateV1(
  * Get the deployment key from the request, included in Authorization header
  * with prefix "Api-Key "
  */
-private fun ApplicationRequest.getDeploymentKey(): String? {
-    val deploymentKey = this.headers["Authorization"]
+@VisibleForTesting
+internal fun Headers.getDeploymentKey(): String? {
+    val deploymentKey = this["Authorization"]
     if (deploymentKey == null || !deploymentKey.startsWith("Api-Key", ignoreCase = true)) {
         return null
     }
@@ -213,16 +217,24 @@ private fun ApplicationRequest.getDeploymentKey(): String? {
  * Get the API and secret key from the request, included in Authorization
  * header as Basic auth.
  */
-private fun ApplicationRequest.getApiAndSecretKey(): Pair<String?, String?> {
-    val authHeaderValue = this.headers["Authorization"]
+@VisibleForTesting
+internal fun Headers.getApiAndSecretKey(): Pair<String?, String?> {
+    val authHeaderValue = this["Authorization"]
     if (authHeaderValue == null || !authHeaderValue.startsWith("Basic", ignoreCase = true)) {
         return null to null
     }
-    val segmentedAuthValue = authHeaderValue.substring("Basic ".length).split(":")
-    if (segmentedAuthValue.size < 2) {
+    try {
+        val segmentedAuthValue = authHeaderValue
+            .substring("Basic ".length)
+            .decodeBase64String()
+            .split(":")
+        if (segmentedAuthValue.size < 2) {
+            return null to null
+        }
+        return segmentedAuthValue[0] to segmentedAuthValue[1]
+    } catch (e: Exception) {
         return null to null
     }
-    return segmentedAuthValue[0] to segmentedAuthValue[1]
 }
 
 /**

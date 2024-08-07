@@ -45,9 +45,9 @@ internal class CohortLoader(
                         }
                     }
                 if (cohort != null) {
+                    log.info("Cohort download complete. {}", cohort)
                     cohortStorage.putCohort(cohort)
                 }
-                log.info("Cohort download complete. {}", cohort ?: cohortId)
             } catch (t: Throwable) {
                 // Don't throw if we fail to download the cohort. We
                 // prefer to continue to update flags.

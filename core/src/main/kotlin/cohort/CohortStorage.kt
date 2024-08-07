@@ -212,16 +212,18 @@ internal class RedisCohortStorage(
         val jsonEncodedDescription = json.encodeToString(description)
         val existingDescription = getCohortDescription(description.id)
         if ((existingDescription?.lastModified ?: 0L) < description.lastModified) {
-            redis.sadd(
-                RedisKey.CohortMembers(
-                    prefix,
-                    projectId,
-                    description.id,
-                    description.groupType,
-                    description.lastModified,
-                ),
-                cohort.members,
-            )
+            if (cohort.members.isNotEmpty()) {
+                redis.sadd(
+                    RedisKey.CohortMembers(
+                        prefix,
+                        projectId,
+                        description.id,
+                        description.groupType,
+                        description.lastModified,
+                    ),
+                    cohort.members,
+                )
+            }
             redis.hset(RedisKey.CohortDescriptions(prefix, projectId), mapOf(description.id to jsonEncodedDescription))
             if (existingDescription != null) {
                 redis.expire(
