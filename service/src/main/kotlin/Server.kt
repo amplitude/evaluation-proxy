@@ -224,10 +224,11 @@ internal fun Headers.getApiAndSecretKey(): Pair<String?, String?> {
         return null to null
     }
     try {
-        val segmentedAuthValue = authHeaderValue
-            .substring("Basic ".length)
-            .decodeBase64String()
-            .split(":")
+        val segmentedAuthValue =
+            authHeaderValue
+                .substring("Basic ".length)
+                .decodeBase64String()
+                .split(":")
         if (segmentedAuthValue.size < 2) {
             return null to null
         }

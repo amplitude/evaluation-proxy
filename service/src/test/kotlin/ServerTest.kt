@@ -5,14 +5,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ServerTest {
-
     @Test
     fun `test get api and secret key`() {
         val apiKey = "api"
         val secretKey = "secret"
-        val headers = Headers.build {
-            set("Authorization", "Basic ${"$apiKey:$secretKey".encodeBase64()}")
-        }
+        val headers =
+            Headers.build {
+                set("Authorization", "Basic ${"$apiKey:$secretKey".encodeBase64()}")
+            }
 
         val result = headers.getApiAndSecretKey()
         assertEquals(apiKey, result.first)
