@@ -38,3 +38,6 @@ out/
 # Custom
 config.yaml
 projects.yaml
+
+# macOS
+.DS_Store

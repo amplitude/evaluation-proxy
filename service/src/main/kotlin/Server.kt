@@ -259,7 +259,7 @@ private fun ApplicationRequest.getFlagKeys(): Set<String> {
  * Get the user from the header. Used for SDK GET requests.
  */
 private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
-    val b64User = this.headers["X-Amp-Exp-User"]
+    val b64User = this.headers["X-Amp-Exp-User"] ?: return emptyMap()
     val userJson = Base64.getDecoder().decode(b64User).toString(Charsets.UTF_8)
     return json.decodeFromString<JsonObject>(userJson).toAnyMap()
 }
