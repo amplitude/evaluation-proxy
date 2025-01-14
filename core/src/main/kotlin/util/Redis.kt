@@ -145,7 +145,7 @@ internal class RedisConnection(
     }
 
     override suspend fun sscan(key: RedisKey, limit: Long): Set<String>? {
-        val exists = connection.run { type(key.value) } != "none"
+        var exists = connection.run { type(key.value) } != "none"
         if (!exists) {
             return null
         }
@@ -157,6 +157,11 @@ internal class RedisConnection(
             }
             result.addAll(cursor.values)
         } while (!cursor.isFinished)
+        exists = connection.run { type(key.value) } != "none"
+        if (!exists) {
+            // Set may expire or get deleted while the scan is in process.
+            return null
+        }
         return result
     }
 
