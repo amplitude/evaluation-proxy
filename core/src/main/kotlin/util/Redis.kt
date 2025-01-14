@@ -65,7 +65,10 @@ internal interface Redis {
         value: String,
     )
 
-    suspend fun sscan(key: RedisKey, limit: Long): Set<String>?
+    suspend fun sscan(
+        key: RedisKey,
+        limit: Long,
+    ): Set<String>?
 
     suspend fun sismember(
         key: RedisKey,
@@ -144,7 +147,10 @@ internal class RedisConnection(
         }
     }
 
-    override suspend fun sscan(key: RedisKey, limit: Long): Set<String>? {
+    override suspend fun sscan(
+        key: RedisKey,
+        limit: Long,
+    ): Set<String>? {
         var exists = connection.run { type(key.value) } != "none"
         if (!exists) {
             return null
@@ -152,9 +158,10 @@ internal class RedisConnection(
         val result = mutableSetOf<String>()
         var cursor = ScanCursor.INITIAL
         do {
-            cursor = connection.run {
-                sscan(key.value, cursor, ScanArgs().limit(limit))
-            }
+            cursor =
+                connection.run {
+                    sscan(key.value, cursor, ScanArgs().limit(limit))
+                }
             result.addAll(cursor.values)
         } while (!cursor.isFinished)
         exists = connection.run { type(key.value) } != "none"

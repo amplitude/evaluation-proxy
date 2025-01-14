@@ -82,7 +82,7 @@ internal fun getCohortStorage(
             redisConfiguration.prefix,
             redis,
             readOnlyRedis,
-            redisConfiguration.scanLimit
+            redisConfiguration.scanLimit,
         )
     }
 }

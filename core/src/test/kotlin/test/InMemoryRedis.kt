@@ -38,7 +38,10 @@ internal class InMemoryRedis : Redis {
         sets.getOrPut(key.value) { mutableSetOf() }.remove(value)
     }
 
-    override suspend fun sscan(key: RedisKey, limit: Long): Set<String>? {
+    override suspend fun sscan(
+        key: RedisKey,
+        limit: Long,
+    ): Set<String>? {
         return sets[key.value]?.toSet()
     }
 

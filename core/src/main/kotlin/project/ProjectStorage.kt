@@ -47,7 +47,7 @@ internal class InMemoryProjectStorage : ProjectStorage {
 internal class RedisProjectStorage(
     private val prefix: String,
     private val redis: Redis,
-    private val scanLimit: Long
+    private val scanLimit: Long,
 ) : ProjectStorage {
     override suspend fun getProjects(): Set<String> {
         return redis.sscan(RedisKey.Projects(prefix), scanLimit) ?: emptySet()
