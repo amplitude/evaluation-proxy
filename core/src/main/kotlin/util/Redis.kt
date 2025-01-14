@@ -6,6 +6,8 @@ import com.amplitude.RedisCommandFailure
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisFuture
 import io.lettuce.core.RedisURI
+import io.lettuce.core.ScanArgs
+import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.codec.StringCodec
@@ -63,7 +65,7 @@ internal interface Redis {
         value: String,
     )
 
-    suspend fun smembers(key: RedisKey): Set<String>?
+    suspend fun sscan(key: RedisKey, limit: Long): Set<String>?
 
     suspend fun sismember(
         key: RedisKey,
@@ -142,10 +144,20 @@ internal class RedisConnection(
         }
     }
 
-    override suspend fun smembers(key: RedisKey): Set<String>? {
-        return connection.run {
-            smembers(key.value)
+    override suspend fun sscan(key: RedisKey, limit: Long): Set<String>? {
+        val exists = connection.run { type(key.value) } != "none"
+        if (!exists) {
+            return null
         }
+        val result = mutableSetOf<String>()
+        var cursor = ScanCursor.INITIAL
+        do {
+            cursor = connection.run {
+                sscan(key.value, cursor, ScanArgs().limit(limit))
+            }
+            result.addAll(cursor.values)
+        } while (!cursor.isFinished)
+        return result
     }
 
     override suspend fun sismember(

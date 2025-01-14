@@ -160,6 +160,7 @@ data class RedisConfiguration(
     val uri: String? = null,
     val readOnlyUri: String? = uri,
     val prefix: String = Default.REDIS_PREFIX,
+    val scanLimit: Long = Default.REDIS_SCAN_LIMIT,
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
@@ -167,10 +168,12 @@ data class RedisConfiguration(
             return if (redisUri != null) {
                 val redisReadOnlyUri = stringEnv(EnvKey.REDIS_READ_ONLY_URI, Default.REDIS_READ_ONLY_URI) ?: redisUri
                 val redisPrefix = stringEnv(EnvKey.REDIS_PREFIX, Default.REDIS_PREFIX)!!
+                val redisScanLimit = longEnv(EnvKey.REDIS_SCAN_LIMIT, Default.REDIS_SCAN_LIMIT)!!
                 RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
                     prefix = redisPrefix,
+                    scanLimit = redisScanLimit,
                 )
             } else {
                 null
@@ -204,6 +207,7 @@ object EnvKey {
     const val REDIS_URI = "AMPLITUDE_REDIS_URI"
     const val REDIS_READ_ONLY_URI = "AMPLITUDE_REDIS_READ_ONLY_URI"
     const val REDIS_PREFIX = "AMPLITUDE_REDIS_PREFIX"
+    const val REDIS_SCAN_LIMIT = "AMPLITUDE_REDIS_SCAN_LIMIT"
 }
 
 object Default {
@@ -230,6 +234,7 @@ object Default {
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_PREFIX = "amplitude"
+    const val REDIS_SCAN_LIMIT = 10000L
 }
 
 private fun getServerUrl(zone: String): String {
