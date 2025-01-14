@@ -18,7 +18,7 @@ class ProjectStorageTest {
     @Test
     fun `test redis`(): Unit =
         runBlocking {
-            test(RedisProjectStorage("amplitude", InMemoryRedis()))
+            test(RedisProjectStorage("amplitude", InMemoryRedis(), 1000))
         }
 
     private fun test(storage: ProjectStorage) =

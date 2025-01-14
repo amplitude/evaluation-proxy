@@ -26,7 +26,7 @@ class CohortStorageTest {
     @Test
     fun `test redis`(): Unit =
         runBlocking {
-            test(RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis))
+            test(RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000))
         }
 
     private fun test(cohortStorage: CohortStorage): Unit =

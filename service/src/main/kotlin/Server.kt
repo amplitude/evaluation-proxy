@@ -65,7 +65,7 @@ fun main() {
             log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
             ConfigurationFile.fromEnv()
         }
-
+    log.info("Using configuration: ${configFile.configuration}")
     /*
      * Initialize and start the evaluation proxy.
      */

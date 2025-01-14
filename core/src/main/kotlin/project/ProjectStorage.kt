@@ -20,7 +20,7 @@ internal fun getProjectStorage(redisConfiguration: RedisConfiguration?): Project
     return if (uri == null) {
         InMemoryProjectStorage()
     } else {
-        RedisProjectStorage(redisConfiguration.prefix, RedisConnection(uri))
+        RedisProjectStorage(redisConfiguration.prefix, RedisConnection(uri), redisConfiguration.scanLimit)
     }
 }
 
@@ -47,9 +47,10 @@ internal class InMemoryProjectStorage : ProjectStorage {
 internal class RedisProjectStorage(
     private val prefix: String,
     private val redis: Redis,
+    private val scanLimit: Long,
 ) : ProjectStorage {
     override suspend fun getProjects(): Set<String> {
-        return redis.smembers(RedisKey.Projects(prefix)) ?: emptySet()
+        return redis.sscan(RedisKey.Projects(prefix), scanLimit) ?: emptySet()
     }
 
     override suspend fun putProject(projectId: String) {

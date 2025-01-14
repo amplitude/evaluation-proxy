@@ -76,7 +76,14 @@ internal fun getCohortStorage(
             } else {
                 redis
             }
-        RedisCohortStorage(projectId, ttl, redisConfiguration.prefix, redis, readOnlyRedis)
+        RedisCohortStorage(
+            projectId,
+            ttl,
+            redisConfiguration.prefix,
+            redis,
+            readOnlyRedis,
+            redisConfiguration.scanLimit,
+        )
     }
 }
 
@@ -135,6 +142,7 @@ internal class RedisCohortStorage(
     private val prefix: String,
     private val redis: Redis,
     private val readOnlyRedis: Redis,
+    private val scanLimit: Long,
 ) : CohortStorage {
     companion object {
         val log by logger()
@@ -258,6 +266,6 @@ internal class RedisCohortStorage(
         cohortGroupType: String,
         cohortLastModified: Long,
     ): Set<String>? {
-        return redis.smembers(RedisKey.CohortMembers(prefix, projectId, cohortId, cohortGroupType, cohortLastModified))
+        return redis.sscan(RedisKey.CohortMembers(prefix, projectId, cohortId, cohortGroupType, cohortLastModified), scanLimit)
     }
 }
