@@ -14,6 +14,7 @@ import com.amplitude.project.getProjectStorage
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
@@ -393,12 +394,12 @@ class EvaluationProxy internal constructor(
         block: suspend () -> EvaluationProxyResponse,
     ): EvaluationProxyResponse {
         track(EvaluationProxyRequest)
-        metric?.invoke()
+        metric?.invoke()?.let { track(it) }
         val response = block()
-        if (response.status.value >= 400) {
+        if (!response.status.isSuccess()) {
             val exception = EvaluationProxyResponseException(response)
             track(EvaluationProxyRequestError(exception))
-            failure?.invoke(exception)
+            failure?.invoke(exception)?.let { track(it) }
         }
         return response
     }

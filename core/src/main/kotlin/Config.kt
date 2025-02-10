@@ -89,6 +89,7 @@ data class Configuration(
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
     val assignment: AssignmentConfiguration = AssignmentConfiguration(),
     val redis: RedisConfiguration? = null,
+    val metrics: MetricsConfiguration = MetricsConfiguration(),
 ) {
     companion object {
         fun fromEnv() =
@@ -182,6 +183,26 @@ data class RedisConfiguration(
     }
 }
 
+@Serializable
+data class MetricsConfiguration(
+    val port: Int = Default.METRICS_PORT,
+    val path: String = Default.METRICS_PATH,
+    val logFailures: Boolean = Default.METRICS_LOG_FAILURES,
+) {
+    companion object {
+        fun fromEnv(): MetricsConfiguration {
+            val port = intEnv(EnvKey.METRICS_PORT, Default.METRICS_PORT)!!
+            val path = stringEnv(EnvKey.METRICS_PATH, Default.METRICS_PATH)!!
+            val logFailures = booleanEnv(EnvKey.METRICS_LOG_FAILURES, Default.METRICS_LOG_FAILURES)
+            return MetricsConfiguration(
+                port = port,
+                path = path,
+                logFailures = logFailures,
+            )
+        }
+    }
+}
+
 object EnvKey {
     const val PORT = "AMPLITUDE_PORT"
     const val SERVER_ZONE = "AMPLITUDE_SERVER_ZONE"
@@ -208,6 +229,10 @@ object EnvKey {
     const val REDIS_READ_ONLY_URI = "AMPLITUDE_REDIS_READ_ONLY_URI"
     const val REDIS_PREFIX = "AMPLITUDE_REDIS_PREFIX"
     const val REDIS_SCAN_LIMIT = "AMPLITUDE_REDIS_SCAN_LIMIT"
+
+    const val METRICS_PORT = "AMPLITUDE_METRICS_PORT"
+    const val METRICS_PATH = "AMPLITUDE_METRICS_PATH"
+    const val METRICS_LOG_FAILURES = "AMPLITUDE_METRICS_LOG_FAILURES"
 }
 
 object Default {
@@ -235,6 +260,10 @@ object Default {
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_PREFIX = "amplitude"
     const val REDIS_SCAN_LIMIT = 10000L
+
+    const val METRICS_PORT = 9090
+    const val METRICS_PATH = "metrics"
+    const val METRICS_LOG_FAILURES = false
 }
 
 private fun getServerUrl(zone: String): String {
