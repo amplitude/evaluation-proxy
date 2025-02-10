@@ -1,5 +1,6 @@
 package com.amplitude
 
+import com.amplitude.plugins.PrometheusMetrics
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
 import com.amplitude.util.json
@@ -25,6 +26,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.decodeBase64String
 import io.ktor.util.toByteArray
+import io.micrometer.prometheus.PrometheusConfig
+import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,6 +36,7 @@ import java.io.FileNotFoundException
 import java.util.Base64
 
 private lateinit var evaluationProxy: EvaluationProxy
+private val prometheus: PrometheusMeterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
 
 fun main() {
     val log = logger("Service")
@@ -71,9 +75,25 @@ fun main() {
      */
     evaluationProxy =
         EvaluationProxy(
-            projectsFile.projects,
-            configFile.configuration,
+            projectConfigurations = projectsFile.projects,
+            configuration = configFile.configuration,
+            metricsHandler = PrometheusMetrics(prometheus, true)
         )
+
+    /*
+     * Start the prometheus metrics server.
+     */
+    embeddedServer(
+        factory = Netty,
+        port = configFile.configuration.metrics.port,
+        host = "0.0.0.0",
+    ) {
+        routing {
+            get("/${configFile.configuration.metrics.path}") {
+                call.respond(prometheus.scrape())
+            }
+        }
+    }.start(wait = false)
 
     /*
      * Start the server.
@@ -95,7 +115,7 @@ fun Application.proxyServer() {
      * Configure ktor plugins.
      */
     configureLogging()
-    configureMetrics()
+    configureMetrics(prometheus)
     install(ContentNegotiation) {
         json(json)
     }
@@ -275,7 +295,7 @@ private suspend fun ApplicationRequest.getUserFromBody(): Map<String, Any?> {
 /**
  * Get the user from the query. Used for REST GET requests.
  */
-private fun ApplicationRequest.getUserFromQuery(): JsonObject {
+private fun ApplicationRequest.getUserFromQuery(): Map<String, Any?> {
     val userId = this.queryParameters["user_id"]
     val deviceId = this.queryParameters["device_id"]
     val context = this.queryParameters["context"]
@@ -297,9 +317,9 @@ private fun ApplicationRequest.getUserFromQuery(): JsonObject {
         user =
             JsonObject(
                 user.toMutableMap().apply {
-                    put("device_id", JsonPrimitive(userId))
+                    put("device_id", JsonPrimitive(deviceId))
                 },
             )
     }
-    return user
+    return user.toAnyMap()
 }

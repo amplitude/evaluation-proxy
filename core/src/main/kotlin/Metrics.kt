@@ -69,10 +69,10 @@ internal object Metrics : MetricsHandler {
         block: suspend () -> R,
     ): R {
         try {
-            metric?.invoke()
+            metric?.invoke()?.let { handler?.track(it) }
             return block.invoke()
         } catch (e: Exception) {
-            failure?.invoke(e)
+            failure?.invoke(e)?.let { handler?.track(it) }
             throw e
         }
     }
