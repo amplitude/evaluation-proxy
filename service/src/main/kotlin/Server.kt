@@ -77,7 +77,7 @@ fun main() {
         EvaluationProxy(
             projectConfigurations = projectsFile.projects,
             configuration = configFile.configuration,
-            metricsHandler = PrometheusMetrics(prometheus, true)
+            metricsHandler = PrometheusMetrics(prometheus, true),
         )
 
     /*

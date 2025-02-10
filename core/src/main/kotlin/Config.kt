@@ -9,7 +9,6 @@ import com.amplitude.util.yaml
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import java.io.File
-import kotlin.math.log
 
 @Serializable
 data class ProjectsFile(
