@@ -39,7 +39,6 @@ internal class AmplitudeAssignmentTracker(
         serverUrl: String,
         config: AssignmentConfiguration,
     ) : this (
-
         amplitude =
             Amplitude.getInstance(apiKey).apply {
                 setServerUrl(serverUrl)
