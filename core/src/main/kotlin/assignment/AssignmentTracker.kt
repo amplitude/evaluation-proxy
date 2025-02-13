@@ -39,8 +39,9 @@ internal class AmplitudeAssignmentTracker(
         serverUrl: String,
         config: AssignmentConfiguration,
     ) : this (
+
         amplitude =
-            Amplitude.getInstance().apply {
+            Amplitude.getInstance(apiKey).apply {
                 setServerUrl(serverUrl)
                 setEventUploadThreshold(config.eventUploadThreshold)
                 setEventUploadPeriodMillis(config.eventUploadPeriodMillis)
