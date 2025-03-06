@@ -80,7 +80,7 @@ internal class ProjectProxy(
             return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort not found")
         }
         val cohortDescription =
-            cohortStorage.getCohort(cohortId)
+            cohortStorage.getCohortDescription(cohortId)
                 ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort not found")
         if (cohortDescription.size > (maxCohortSize ?: Int.MAX_VALUE)) {
             return EvaluationProxyResponse.error(
