@@ -54,7 +54,7 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun sdiff(
         key1: RedisKey,
-        key2: RedisKey
+        key2: RedisKey,
     ): Set<String>? {
         return sets[key1.value]?.subtract(sets[key2.value] ?: setOf())
     }

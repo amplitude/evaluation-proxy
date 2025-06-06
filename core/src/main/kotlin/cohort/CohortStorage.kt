@@ -193,24 +193,26 @@ internal class RedisCohortStorage(
         if ((existingDescription?.lastModified ?: 0L) < description.lastModified) {
             if (cohort.members.isNotEmpty()) {
                 // Set the full cohort members set
-                val cohortKey = RedisKey.CohortMembers(
-                    prefix,
-                    projectId,
-                    description.id,
-                    description.groupType,
-                    description.lastModified,
-                )
+                val cohortKey =
+                    RedisKey.CohortMembers(
+                        prefix,
+                        projectId,
+                        description.id,
+                        description.groupType,
+                        description.lastModified,
+                    )
                 redis.sadd(cohortKey, cohort.members)
                 val addedUsers: Set<String>
                 val removedUsers: Set<String>
                 if (existingDescription != null) {
-                    val existingCohortKey = RedisKey.CohortMembers(
-                        prefix,
-                        projectId,
-                        existingDescription.id,
-                        existingDescription.groupType,
-                        existingDescription.lastModified,
-                    )
+                    val existingCohortKey =
+                        RedisKey.CohortMembers(
+                            prefix,
+                            projectId,
+                            existingDescription.id,
+                            existingDescription.groupType,
+                            existingDescription.lastModified,
+                        )
                     // Determine added users
                     addedUsers = redis.sdiff(cohortKey, existingCohortKey) ?: emptySet()
                     removedUsers = redis.sdiff(cohortKey, existingCohortKey) ?: emptySet()

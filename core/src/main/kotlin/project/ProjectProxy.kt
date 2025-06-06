@@ -15,7 +15,6 @@ import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
 import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.experiment.evaluation.topologicalSort
-import com.amplitude.util.getGroupedCohortIds
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.toEvaluationContext

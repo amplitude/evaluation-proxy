@@ -195,7 +195,7 @@ internal class RedisConnection(
 
     override suspend fun sdiff(
         key1: RedisKey,
-        key2: RedisKey
+        key2: RedisKey,
     ): Set<String>? {
         return connection.run {
             sdiff(key1.value, key2.value)
