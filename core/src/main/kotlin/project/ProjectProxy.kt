@@ -111,11 +111,7 @@ internal class ProjectProxy(
         if (groupName.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.BadRequest, "Invalid group name")
         }
-        val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getGroupedCohortIds()[groupType]
-        if (cohortIds.isNullOrEmpty()) {
-            return EvaluationProxyResponse.json(HttpStatusCode.OK, emptySet<String>())
-        }
-        val result = cohortStorage.getCohortMemberships(groupType, groupName, cohortIds)
+        val result = cohortStorage.getCohortMemberships(groupType, groupName)
         return EvaluationProxyResponse.json(HttpStatusCode.OK, result)
     }
 
@@ -162,13 +158,11 @@ internal class ProjectProxy(
         if (flags.isEmpty()) {
             return mapOf()
         }
-        val groupedCohortIds = flags.getGroupedCohortIds()
         // Enrich user with cohort IDs and build the evaluation context
         val userId = user?.get("user_id") as? String
         val enrichedUser = user?.toMutableMap() ?: mutableMapOf()
-        val userCohortIds = groupedCohortIds[USER_GROUP_TYPE]
-        if (userId != null && userCohortIds != null) {
-            enrichedUser["cohort_ids"] = cohortStorage.getCohortMemberships(USER_GROUP_TYPE, userId, userCohortIds)
+        if (userId != null) {
+            enrichedUser["cohort_ids"] = cohortStorage.getCohortMemberships(USER_GROUP_TYPE, userId)
         }
         val groups = enrichedUser["groups"] as? Map<*, *>
         if (!groups.isNullOrEmpty()) {
@@ -176,9 +170,8 @@ internal class ProjectProxy(
             for (entry in groups.entries) {
                 val groupType = entry.key as? String
                 val groupName = (entry.value as? Collection<*>)?.firstOrNull() as? String
-                val groupTypeCohortIds = groupedCohortIds[groupType]
-                if (groupType != null && groupName != null && groupTypeCohortIds != null) {
-                    val cohortIds = cohortStorage.getCohortMemberships(groupType, groupName, groupTypeCohortIds)
+                if (groupType != null && groupName != null) {
+                    val cohortIds = cohortStorage.getCohortMemberships(groupType, groupName)
                     if (groupCohortIds.isNotEmpty()) {
                         groupCohortIds.putIfAbsent(groupType, mutableMapOf(groupName to cohortIds))
                     }

@@ -35,7 +35,6 @@ import org.jetbrains.annotations.VisibleForTesting
 import java.io.FileNotFoundException
 import java.util.Base64
 
-private lateinit var evaluationProxy: EvaluationProxy
 private val prometheus: PrometheusMeterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
 
 fun main() {
@@ -73,7 +72,7 @@ fun main() {
     /*
      * Initialize and start the evaluation proxy.
      */
-    evaluationProxy =
+    val evaluationProxy =
         EvaluationProxy(
             projectConfigurations = projectsFile.projects,
             configuration = configFile.configuration,
@@ -102,11 +101,11 @@ fun main() {
         factory = Netty,
         port = configFile.configuration.port,
         host = "0.0.0.0",
-        module = Application::proxyServer,
+        module = { proxyServer(evaluationProxy) },
     ).start(wait = true)
 }
 
-fun Application.proxyServer() {
+fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
     runBlocking {
         evaluationProxy.start()
     }

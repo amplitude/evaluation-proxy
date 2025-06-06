@@ -15,7 +15,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.future.asDeferred
 import kotlin.time.Duration
 
-private const val STORAGE_PROTOCOL_VERSION = "v3"
+private const val STORAGE_PROTOCOL_VERSION = "v4"
 
 internal sealed class RedisKey(val value: String) {
     data class Projects(val prefix: String) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects")
@@ -43,6 +43,13 @@ internal sealed class RedisKey(val value: String) {
         val cohortGroupType: String,
         val cohortLastModified: Long,
     ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:$cohortId:$cohortGroupType:$cohortLastModified")
+
+    data class UserCohortMemberships(
+        val prefix: String,
+        val projectId: String,
+        val groupType: String,
+        val userId: String,
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:memberships:$groupType:$userId")
 }
 
 internal interface Redis {
@@ -74,6 +81,11 @@ internal interface Redis {
         key: RedisKey,
         value: String,
     ): Boolean
+
+    suspend fun sdiff(
+        key1: RedisKey,
+        key2: RedisKey,
+    ): Set<String>?
 
     suspend fun hget(
         key: RedisKey,
@@ -178,6 +190,15 @@ internal class RedisConnection(
     ): Boolean {
         return connection.run {
             sismember(key.value, value)
+        }
+    }
+
+    override suspend fun sdiff(
+        key1: RedisKey,
+        key2: RedisKey
+    ): Set<String>? {
+        return connection.run {
+            sdiff(key1.value, key2.value)
         }
     }
 

@@ -31,7 +31,9 @@ class CohortStorageTest {
 
     private fun test(cohortStorage: CohortStorage): Unit =
         runBlocking {
-            val cohortA = cohort("a")
+            val groupType = "User"
+            val groupName = "1"
+            val cohortA = cohort("a", groupType = groupType, members = setOf(groupName))
             val cohortB = cohort("b")
 
             // test get, null
@@ -46,6 +48,9 @@ class CohortStorageTest {
             // test get descriptions, empty
             var descriptions: Map<String, CohortDescription> = cohortStorage.getCohortDescriptions()
             assertEquals(0, descriptions.size)
+            // test get memberships, empty
+            var memberships: Set<String> = cohortStorage.getCohortMemberships(groupType, groupName)
+            assertEquals(0, memberships.size)
             // test put, get, cohort
             cohortStorage.putCohort(cohortA)
             cohort = cohortStorage.getCohort(cohortA.id)
@@ -53,6 +58,9 @@ class CohortStorageTest {
             // test get description, description
             description = cohortStorage.getCohortDescription(cohortA.id)
             assertEquals(cohortA.toCohortDescription(), description)
+            // test get memberships, memberships
+            memberships = cohortStorage.getCohortMemberships(groupType, groupName)
+            assertEquals(setOf(cohortA.id), memberships)
             // test put, get all, cohorts
             cohortStorage.putCohort(cohortB)
             cohorts = cohortStorage.getCohorts()
@@ -72,6 +80,9 @@ class CohortStorageTest {
                 ),
                 descriptions,
             )
+            // test get memberships, memberships
+            memberships = cohortStorage.getCohortMemberships(groupType, groupName)
+            assertEquals(setOf(cohortA.id, cohortB.id), memberships)
             // test delete one
             cohortStorage.deleteCohort(cohortA.toCohortDescription())
             // test get deleted, null
@@ -92,6 +103,9 @@ class CohortStorageTest {
             // test get descriptions, description
             descriptions = cohortStorage.getCohortDescriptions()
             assertEquals(mapOf(cohortB.id to cohortB.toCohortDescription()), descriptions)
+            // test get memberships, membership other
+            memberships = cohortStorage.getCohortMemberships(groupType, groupName)
+            assertEquals(setOf(cohortB.id), memberships)
             // test delete other
             cohortStorage.deleteCohort(cohortB.toCohortDescription())
             // test get all, empty
@@ -100,5 +114,8 @@ class CohortStorageTest {
             // test get descriptions, empty
             descriptions = cohortStorage.getCohortDescriptions()
             assertEquals(0, descriptions.size)
+            // test get memberships, empty
+            memberships = cohortStorage.getCohortMemberships(groupType, groupName)
+            assertEquals(0, memberships.size)
         }
 }
