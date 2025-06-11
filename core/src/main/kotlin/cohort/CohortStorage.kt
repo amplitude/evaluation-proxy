@@ -213,9 +213,9 @@ internal class RedisCohortStorage(
                             existingDescription.groupType,
                             existingDescription.lastModified,
                         )
-                    // Determine added users
+                    // Determine added & removed users
                     addedUsers = redis.sdiff(cohortKey, existingCohortKey) ?: emptySet()
-                    removedUsers = redis.sdiff(cohortKey, existingCohortKey) ?: emptySet()
+                    removedUsers = redis.sdiff(existingCohortKey, cohortKey) ?: emptySet()
                 } else {
                     addedUsers = cohort.members
                     removedUsers = emptySet()

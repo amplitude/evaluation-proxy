@@ -6,6 +6,7 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.cohort.toCohortDescription
+import com.amplitude.util.RedisKey
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
 import test.cohort
@@ -117,5 +118,40 @@ class CohortStorageTest {
             // test get memberships, empty
             memberships = cohortStorage.getCohortMemberships(groupType, groupName)
             assertEquals(0, memberships.size)
+        }
+
+    @Test
+    fun `test redis, put cohort, users memberships exist in redis`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000)
+            // put cohort
+            val cohort = cohort("a", lastModified = 1, members = setOf("1", "2", "3"))
+            cohortStorage.putCohort(cohort)
+            // check cohort membership
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
+                assertEquals(setOf(cohort.id), it)
+            }
+            // put updated cohort
+            cohortStorage.putCohort(cohort("a", lastModified = 2, members = setOf("1", "2")))
+            // check cohort membership exists
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
+                assertEquals(setOf(cohort.id), it)
+            }
+            // check cohort membership removed
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "3"), 1000)?.let {
+                assertEquals(0, it.size)
+            }
+            // delete cohort
+            cohortStorage.deleteCohort(cohort.toCohortDescription())
+            // check cohort membership
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
+                assertEquals(0, it.size)
+            }
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "2"), 1000)?.let {
+                assertEquals(0, it.size)
+            }
+            redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "3"), 1000)?.let {
+                assertEquals(0, it.size)
+            }
         }
 }

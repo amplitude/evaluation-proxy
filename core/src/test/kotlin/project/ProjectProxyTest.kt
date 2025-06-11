@@ -156,7 +156,7 @@ class ProjectProxyTest {
         runBlocking {
             val deployment = deployment("deployment")
             val flag = flag("flag", setOf("a"))
-            val cohort = cohort("a", 100, 100)
+            val cohort = cohort("a", 100, size = 100)
             val assignmentTracker = mockk<AssignmentTracker>()
             val deploymentStorage =
                 InMemoryDeploymentStorage().apply {
@@ -182,7 +182,7 @@ class ProjectProxyTest {
     @Test
     fun `test get cohort, with cohort id and max cohort size, too large`(): Unit =
         runBlocking {
-            val cohort = cohort("a", 100, 100)
+            val cohort = cohort("a", 100, size = 100)
             val assignmentTracker = mockk<AssignmentTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
