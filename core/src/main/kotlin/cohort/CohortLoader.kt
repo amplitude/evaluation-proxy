@@ -39,7 +39,7 @@ internal class CohortLoader(
                     Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
                         try {
                             cohortApi.getCohort(cohortId, storageCohort?.lastModified, maxCohortSize)
-                        } catch (e: CohortNotModifiedException) {
+                        } catch (_: CohortNotModifiedException) {
                             log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
                             null
                         }

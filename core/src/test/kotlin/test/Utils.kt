@@ -60,9 +60,9 @@ internal fun flag(
 internal fun cohort(
     id: String,
     lastModified: Long = 100,
-    size: Int = 1,
     members: Set<String> = setOf("1"),
     groupType: String = "User",
+    size: Int = members.size,
 ) = Cohort(
     id = id,
     groupType = groupType,

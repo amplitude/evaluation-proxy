@@ -3,19 +3,23 @@ package com.amplitude.util
 import com.amplitude.Metrics
 import com.amplitude.RedisCommand
 import com.amplitude.RedisCommandFailure
+import io.lettuce.core.ClientOptions
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisFuture
 import io.lettuce.core.RedisURI
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
+import io.lettuce.core.SocketOptions
+import io.lettuce.core.TimeoutOptions
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.codec.StringCodec
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.future.asDeferred
 import kotlin.time.Duration
+import java.time.Duration as JavaDuration
 
-private const val STORAGE_PROTOCOL_VERSION = "v3"
+private const val STORAGE_PROTOCOL_VERSION = "v4"
 
 internal sealed class RedisKey(val value: String) {
     data class Projects(val prefix: String) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects")
@@ -43,6 +47,13 @@ internal sealed class RedisKey(val value: String) {
         val cohortGroupType: String,
         val cohortLastModified: Long,
     ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:cohorts:$cohortId:$cohortGroupType:$cohortLastModified")
+
+    data class UserCohortMemberships(
+        val prefix: String,
+        val projectId: String,
+        val groupType: String,
+        val userId: String,
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:memberships:$groupType:$userId")
 }
 
 internal interface Redis {
@@ -75,6 +86,11 @@ internal interface Redis {
         value: String,
     ): Boolean
 
+    suspend fun sdiff(
+        key1: RedisKey,
+        key2: RedisKey,
+    ): Set<String>?
+
     suspend fun hget(
         key: RedisKey,
         field: String,
@@ -100,12 +116,40 @@ internal interface Redis {
 
 internal class RedisConnection(
     redisUri: String,
+    connectionTimeoutMillis: Long = 10000L,
+    commandTimeoutMillis: Long = 5000L,
 ) : Redis {
     private val connection: Deferred<StatefulRedisConnection<String, String>>
-    private val client: RedisClient = RedisClient.create(redisUri)
+    private val client: RedisClient
 
     init {
-        connection = client.connectAsync(StringCodec.UTF8, RedisURI.create(redisUri)).asDeferred()
+        // Configure Redis URI with timeout
+        val uri =
+            RedisURI.create(redisUri).apply {
+                timeout = JavaDuration.ofMillis(connectionTimeoutMillis)
+            }
+
+        // Configure client options with timeouts
+        val clientOptions =
+            ClientOptions.builder()
+                .socketOptions(
+                    SocketOptions.builder()
+                        .connectTimeout(JavaDuration.ofMillis(connectionTimeoutMillis))
+                        .build(),
+                )
+                .timeoutOptions(
+                    TimeoutOptions.builder()
+                        .fixedTimeout(JavaDuration.ofMillis(commandTimeoutMillis))
+                        .build(),
+                )
+                .build()
+
+        client =
+            RedisClient.create(uri).apply {
+                setOptions(clientOptions)
+            }
+
+        connection = client.connectAsync(StringCodec.UTF8, uri).asDeferred()
     }
 
     override suspend fun get(key: RedisKey): String? {
@@ -178,6 +222,15 @@ internal class RedisConnection(
     ): Boolean {
         return connection.run {
             sismember(key.value, value)
+        }
+    }
+
+    override suspend fun sdiff(
+        key1: RedisKey,
+        key2: RedisKey,
+    ): Set<String>? {
+        return connection.run {
+            sdiff(key1.value, key2.value)
         }
     }
 

@@ -162,6 +162,8 @@ data class RedisConfiguration(
     val readOnlyUri: String? = uri,
     val prefix: String = Default.REDIS_PREFIX,
     val scanLimit: Long = Default.REDIS_SCAN_LIMIT,
+    val connectionTimeoutMillis: Long = Default.REDIS_CONNECTION_TIMEOUT_MILLIS,
+    val commandTimeoutMillis: Long = Default.REDIS_COMMAND_TIMEOUT_MILLIS,
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
@@ -170,11 +172,15 @@ data class RedisConfiguration(
                 val redisReadOnlyUri = stringEnv(EnvKey.REDIS_READ_ONLY_URI, Default.REDIS_READ_ONLY_URI) ?: redisUri
                 val redisPrefix = stringEnv(EnvKey.REDIS_PREFIX, Default.REDIS_PREFIX)!!
                 val redisScanLimit = longEnv(EnvKey.REDIS_SCAN_LIMIT, Default.REDIS_SCAN_LIMIT)!!
+                val connectionTimeoutMillis = longEnv(EnvKey.REDIS_CONNECTION_TIMEOUT_MILLIS, Default.REDIS_CONNECTION_TIMEOUT_MILLIS)!!
+                val commandTimeoutMillis = longEnv(EnvKey.REDIS_COMMAND_TIMEOUT_MILLIS, Default.REDIS_COMMAND_TIMEOUT_MILLIS)!!
                 RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
                     prefix = redisPrefix,
                     scanLimit = redisScanLimit,
+                    connectionTimeoutMillis = connectionTimeoutMillis,
+                    commandTimeoutMillis = commandTimeoutMillis,
                 )
             } else {
                 null
@@ -229,6 +235,8 @@ object EnvKey {
     const val REDIS_READ_ONLY_URI = "AMPLITUDE_REDIS_READ_ONLY_URI"
     const val REDIS_PREFIX = "AMPLITUDE_REDIS_PREFIX"
     const val REDIS_SCAN_LIMIT = "AMPLITUDE_REDIS_SCAN_LIMIT"
+    const val REDIS_CONNECTION_TIMEOUT_MILLIS = "AMPLITUDE_REDIS_CONNECTION_TIMEOUT_MILLIS"
+    const val REDIS_COMMAND_TIMEOUT_MILLIS = "AMPLITUDE_REDIS_COMMAND_TIMEOUT_MILLIS"
 
     const val METRICS_PORT = "AMPLITUDE_METRICS_PORT"
     const val METRICS_PATH = "AMPLITUDE_METRICS_PATH"
@@ -260,6 +268,8 @@ object Default {
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_PREFIX = "amplitude"
     const val REDIS_SCAN_LIMIT = 10000L
+    const val REDIS_CONNECTION_TIMEOUT_MILLIS = 10000L
+    const val REDIS_COMMAND_TIMEOUT_MILLIS = 5000L
 
     const val METRICS_PORT = 9090
     const val METRICS_PATH = "metrics"

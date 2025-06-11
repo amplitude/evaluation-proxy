@@ -20,7 +20,15 @@ internal fun getProjectStorage(redisConfiguration: RedisConfiguration?): Project
     return if (uri == null) {
         InMemoryProjectStorage()
     } else {
-        RedisProjectStorage(redisConfiguration.prefix, RedisConnection(uri), redisConfiguration.scanLimit)
+        RedisProjectStorage(
+            redisConfiguration.prefix,
+            RedisConnection(
+                uri,
+                redisConfiguration.connectionTimeoutMillis,
+                redisConfiguration.commandTimeoutMillis,
+            ),
+            redisConfiguration.scanLimit,
+        )
     }
 }
 
