@@ -52,10 +52,19 @@ internal fun getDeploymentStorage(
     return if (uri == null) {
         InMemoryDeploymentStorage()
     } else {
-        val redis = RedisConnection(uri)
+        val redis =
+            RedisConnection(
+                uri,
+                redisConfiguration.connectionTimeoutMillis,
+                redisConfiguration.commandTimeoutMillis,
+            )
         val readOnlyRedis =
             if (redisConfiguration.readOnlyUri != null) {
-                RedisConnection(redisConfiguration.readOnlyUri)
+                RedisConnection(
+                    redisConfiguration.readOnlyUri,
+                    redisConfiguration.connectionTimeoutMillis,
+                    redisConfiguration.commandTimeoutMillis,
+                )
             } else {
                 redis
             }
