@@ -254,9 +254,9 @@ object Default {
     const val EU_COHORT_SERVER_URL = "https://cohort-v2.lab.eu.amplitude.com"
     const val EU_MANAGEMENT_SERVER_URL = "https://experiment.eu.amplitude.com"
     const val EU_ANALYTICS_SERVER_URL = "https://api.eu.amplitude.com/2/httpapi"
-    const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = 60 * 1000L
-    const val FLAG_SYNC_INTERVAL_MILLIS = 10 * 1000L
-    const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 1000L
+    const val DEPLOYMENT_SYNC_INTERVAL_MILLIS = 60 * 2 * 1000L
+    const val FLAG_SYNC_INTERVAL_MILLIS = 60 * 1000L
+    const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 2 * 1000L
     const val MAX_COHORT_SIZE = Int.MAX_VALUE
 
     const val ASSIGNMENT_FILTER_CAPACITY = 1 shl 20
