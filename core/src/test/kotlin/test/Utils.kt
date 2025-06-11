@@ -63,7 +63,7 @@ internal fun cohort(
     members: Set<String> = setOf("1"),
     groupType: String = "User",
     size: Int = members.size,
-    ) = Cohort(
+) = Cohort(
     id = id,
     groupType = groupType,
     size = size,
