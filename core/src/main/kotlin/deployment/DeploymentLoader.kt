@@ -1,6 +1,7 @@
 package com.amplitude.deployment
 
 import com.amplitude.cohort.CohortLoader
+import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.Loader
 import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
@@ -30,9 +31,11 @@ internal class DeploymentLoader(
             }
             // Load cohorts for each flag independently then put the
             // flag into storage.
+            val addedFlagKeys = networkFlagKeys - storageFlagKeys
             for (flag in networkFlags) {
                 val cohortIds = flag.getAllCohortIds()
-                if (cohortIds.isNotEmpty()) {
+                // Download cohorts for new flags.
+                if (cohortIds.isNotEmpty() && addedFlagKeys.contains(flag.key)) {
                     launch {
                         cohortLoader.loadCohorts(cohortIds)
                         deploymentStorage.putFlag(deploymentKey, flag)
