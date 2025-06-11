@@ -1,7 +1,6 @@
 package com.amplitude.deployment
 
 import com.amplitude.cohort.CohortLoader
-import com.amplitude.experiment.evaluation.EvaluationFlag
 import com.amplitude.util.Loader
 import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
