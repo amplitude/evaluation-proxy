@@ -23,18 +23,16 @@ internal class CohortLoader(
 
     suspend fun loadCohorts(cohortIds: Set<String>) =
         coroutineScope {
-            val jobs = mutableListOf<Job>()
-            for (cohortId in cohortIds) {
-                jobs += launch { loadCohort(cohortId) }
+            for (cohortId in cohortIds.shuffled()) {
+                loadCohort(cohortId)
             }
-            jobs.joinAll()
         }
 
     private suspend fun loadCohort(cohortId: String) {
         log.trace("loadCohort: start - cohortId={}", cohortId)
-        val storageCohort = cohortStorage.getCohortDescription(cohortId)
         loader.load(cohortId) {
             try {
+                val storageCohort = cohortStorage.getCohortDescription(cohortId)
                 val cohort =
                     Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
                         try {

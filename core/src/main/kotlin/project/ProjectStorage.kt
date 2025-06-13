@@ -66,6 +66,6 @@ internal class RedisProjectStorage(
     }
 
     override suspend fun removeProject(projectId: String) {
-        redis.srem(RedisKey.Projects(prefix), projectId)
+        redis.srem(RedisKey.Projects(prefix), setOf(projectId))
     }
 }

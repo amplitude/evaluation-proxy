@@ -269,7 +269,7 @@ object Default {
     const val REDIS_PREFIX = "amplitude"
     const val REDIS_SCAN_LIMIT = 10000L
     const val REDIS_CONNECTION_TIMEOUT_MILLIS = 10000L
-    const val REDIS_COMMAND_TIMEOUT_MILLIS = 5000L
+    const val REDIS_COMMAND_TIMEOUT_MILLIS = 10000L
 
     const val METRICS_PORT = 9090
     const val METRICS_PATH = "metrics"
