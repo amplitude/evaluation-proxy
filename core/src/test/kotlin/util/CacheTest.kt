@@ -1,5 +1,3 @@
-import com.amplitude.Amplitude
-import com.amplitude.Event
 import com.amplitude.util.Cache
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
@@ -9,18 +7,6 @@ import org.junit.Assert
 import org.junit.Test
 
 class CacheTest {
-
-    @Test
-    fun test() {
-        for (i in 1000000 until 2000000) {
-            val a = Amplitude.getInstance()
-            a.init("a6dd847b9d2f03c816d4f3f8458cdc1d")
-            a.setEventUploadThreshold(1000)
-            a.logEvent(Event("test test", "userid-$i"))
-            println("$i")
-        }
-        Thread.sleep(100000)
-    }
 
     @Test
     fun `test get no entry`() =
