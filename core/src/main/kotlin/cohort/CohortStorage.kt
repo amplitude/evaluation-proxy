@@ -229,12 +229,18 @@ internal class RedisCohortStorage(
                     addedUsers = cohort.members
                     removedUsers = emptySet()
                 }
-                for (user in addedUsers) {
-                    redis.sadd(RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, user), setOf(description.id))
-                }
-                for (user in removedUsers) {
-                    redis.srem(RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, user), description.id)
-                }
+                redis.saddPipeline(
+                    addedUsers.map {
+                        RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+                    },
+                    1000,
+                )
+                redis.sremPipeline(
+                    removedUsers.map {
+                        RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+                    },
+                    1000,
+                )
             }
             redis.hset(RedisKey.CohortDescriptions(prefix, projectId), mapOf(description.id to jsonEncodedDescription))
             if (existingDescription != null) {
@@ -255,9 +261,12 @@ internal class RedisCohortStorage(
     override suspend fun deleteCohort(description: CohortDescription) {
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val members = getCohortMembers(description.id, description.groupType, description.lastModified) ?: emptySet()
-        for (member in members) {
-            redis.srem(RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, member), description.id)
-        }
+        redis.sremPipeline(
+            members.map {
+                RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+            },
+            1000,
+        )
         redis.del(
             RedisKey.CohortMembers(
                 prefix,

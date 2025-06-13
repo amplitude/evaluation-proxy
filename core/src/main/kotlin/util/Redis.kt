@@ -15,7 +15,10 @@ import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.codec.StringCodec
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.asDeferred
+import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 import kotlin.time.Duration
 import java.time.Duration as JavaDuration
 
@@ -52,8 +55,8 @@ internal sealed class RedisKey(val value: String) {
         val prefix: String,
         val projectId: String,
         val groupType: String,
-        val userId: String,
-    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:memberships:$groupType:$userId")
+        val groupName: String,
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:projects:$projectId:memberships:$groupType:$groupName")
 }
 
 internal interface Redis {
@@ -73,7 +76,7 @@ internal interface Redis {
 
     suspend fun srem(
         key: RedisKey,
-        value: String,
+        values: Set<String>,
     )
 
     suspend fun sscan(
@@ -112,6 +115,16 @@ internal interface Redis {
         key: RedisKey,
         ttl: Duration,
     )
+
+    suspend fun saddPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    )
+
+    suspend fun sremPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    )
 }
 
 internal class RedisConnection(
@@ -119,8 +132,14 @@ internal class RedisConnection(
     connectionTimeoutMillis: Long = 10000L,
     commandTimeoutMillis: Long = 5000L,
 ) : Redis {
+    private val pipelineConnection: Deferred<StatefulRedisConnection<String, String>>
+    private val pipelineContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val connection: Deferred<StatefulRedisConnection<String, String>>
     private val client: RedisClient
+
+    companion object {
+        val log by logger()
+    }
 
     init {
         // Configure Redis URI with timeout
@@ -150,6 +169,7 @@ internal class RedisConnection(
             }
 
         connection = client.connectAsync(StringCodec.UTF8, uri).asDeferred()
+        pipelineConnection = client.connectAsync(StringCodec.UTF8, uri).asDeferred()
     }
 
     override suspend fun get(key: RedisKey): String? {
@@ -184,10 +204,10 @@ internal class RedisConnection(
 
     override suspend fun srem(
         key: RedisKey,
-        value: String,
+        values: Set<String>,
     ) {
         connection.run {
-            srem(key.value, value)
+            srem(key.value, *values.toTypedArray())
         }
     }
 
@@ -273,6 +293,46 @@ internal class RedisConnection(
     ) {
         connection.run {
             expire(key.value, ttl.inWholeSeconds)
+        }
+    }
+
+    override suspend fun saddPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    ) {
+        for (i in 0 until commands.size step batchSize) {
+            pipeline {
+                val batch = commands.subList(i, minOf(i + batchSize, commands.size))
+                batch.forEach { (key, values) ->
+                    sadd(key.value, *values.toTypedArray())
+                }
+            }
+        }
+    }
+
+    override suspend fun sremPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    ) {
+        for (i in 0 until commands.size step batchSize) {
+            pipeline {
+                val batch = commands.subList(i, minOf(i + batchSize, commands.size))
+                batch.forEach { (key, values) ->
+                    srem(key.value, *values.toTypedArray())
+                }
+            }
+        }
+    }
+
+    private suspend fun pipeline(block: RedisAsyncCommands<String, String>.() -> Unit) {
+        withContext(pipelineContext) {
+            val commands = pipelineConnection.await()
+            commands.setAutoFlushCommands(false)
+            try {
+                block.invoke(commands.async())
+            } finally {
+                commands.flushCommands()
+            }
         }
     }
 

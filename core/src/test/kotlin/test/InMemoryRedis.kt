@@ -33,9 +33,9 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun srem(
         key: RedisKey,
-        value: String,
+        values: Set<String>,
     ) {
-        sets.getOrPut(key.value) { mutableSetOf() }.remove(value)
+        sets.getOrPut(key.value) { mutableSetOf() }.removeAll(values)
     }
 
     override suspend fun sscan(
@@ -92,5 +92,23 @@ internal class InMemoryRedis : Redis {
         ttl: Duration,
     ) {
         // Do nothing.
+    }
+
+    override suspend fun saddPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    ) {
+        for (command in commands) {
+            sadd(command.first, command.second)
+        }
+    }
+
+    override suspend fun sremPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    ) {
+        for (command in commands) {
+            srem(command.first, command.second)
+        }
     }
 }
