@@ -29,7 +29,7 @@ import org.jetbrains.annotations.VisibleForTesting
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
-const val EVALUATION_PROXY_VERSION = "0.8.1"
+const val EVALUATION_PROXY_VERSION = "0.8.2"
 
 class EvaluationProxyResponseException(
     val response: EvaluationProxyResponse,
