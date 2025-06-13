@@ -116,8 +116,15 @@ internal interface Redis {
         ttl: Duration,
     )
 
-    suspend fun saddPipeline(commands: List<Pair<RedisKey, Set<String>>>, batchSize: Int)
-    suspend fun sremPipeline(commands: List<Pair<RedisKey, Set<String>>>, batchSize: Int)
+    suspend fun saddPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    )
+
+    suspend fun sremPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    )
 }
 
 internal class RedisConnection(
@@ -289,7 +296,10 @@ internal class RedisConnection(
         }
     }
 
-    override suspend fun saddPipeline(commands: List<Pair<RedisKey, Set<String>>>, batchSize: Int) {
+    override suspend fun saddPipeline(
+        commands: List<Pair<RedisKey, Set<String>>>,
+        batchSize: Int,
+    ) {
         for (i in 0 until commands.size step batchSize) {
             pipeline {
                 val batch = commands.subList(i, minOf(i + batchSize, commands.size))
@@ -302,7 +312,7 @@ internal class RedisConnection(
 
     override suspend fun sremPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
-        batchSize: Int
+        batchSize: Int,
     ) {
         for (i in 0 until commands.size step batchSize) {
             pipeline {

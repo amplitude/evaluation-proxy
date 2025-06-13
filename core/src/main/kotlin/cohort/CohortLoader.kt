@@ -5,10 +5,7 @@ import com.amplitude.CohortDownloadFailure
 import com.amplitude.Metrics
 import com.amplitude.util.Loader
 import com.amplitude.util.logger
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 
 internal class CohortLoader(
     private val maxCohortSize: Int,

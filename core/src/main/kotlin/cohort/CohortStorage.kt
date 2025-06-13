@@ -229,8 +229,18 @@ internal class RedisCohortStorage(
                     addedUsers = cohort.members
                     removedUsers = emptySet()
                 }
-                redis.saddPipeline(addedUsers.map { RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id) }, 1000)
-                redis.sremPipeline(removedUsers.map { RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id) }, 1000)
+                redis.saddPipeline(
+                    addedUsers.map {
+                        RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+                    },
+                    1000,
+                )
+                redis.sremPipeline(
+                    removedUsers.map {
+                        RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+                    },
+                    1000,
+                )
             }
             redis.hset(RedisKey.CohortDescriptions(prefix, projectId), mapOf(description.id to jsonEncodedDescription))
             if (existingDescription != null) {
@@ -251,7 +261,12 @@ internal class RedisCohortStorage(
     override suspend fun deleteCohort(description: CohortDescription) {
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val members = getCohortMembers(description.id, description.groupType, description.lastModified) ?: emptySet()
-        redis.sremPipeline(members.map { RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id) }, 1000)
+        redis.sremPipeline(
+            members.map {
+                RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
+            },
+            1000,
+        )
         redis.del(
             RedisKey.CohortMembers(
                 prefix,

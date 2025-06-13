@@ -7,7 +7,6 @@ import org.junit.Assert
 import org.junit.Test
 
 class CacheTest {
-
     @Test
     fun `test get no entry`() =
         runBlocking {

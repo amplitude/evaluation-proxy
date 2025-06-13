@@ -96,7 +96,7 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun saddPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
-        batchSize: Int
+        batchSize: Int,
     ) {
         for (command in commands) {
             sadd(command.first, command.second)
@@ -105,7 +105,7 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun sremPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
-        batchSize: Int
+        batchSize: Int,
     ) {
         for (command in commands) {
             srem(command.first, command.second)
