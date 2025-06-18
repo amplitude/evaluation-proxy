@@ -117,7 +117,7 @@ internal class ProjectRunner(
         if (deploymentRunners.contains(deploymentKey)) {
             return
         }
-        log.debug("Adding and starting deployment runner for $deploymentKey")
+        log.debug("Starting deployment runner for $deploymentKey")
         val deploymentRunner =
             DeploymentRunner(
                 configuration,

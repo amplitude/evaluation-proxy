@@ -6,6 +6,7 @@ import com.amplitude.util.Redis
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
+import com.amplitude.util.logger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -29,11 +30,6 @@ internal interface DeploymentStorage {
     suspend fun putFlag(
         deploymentKey: String,
         flag: EvaluationFlag,
-    )
-
-    suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
     )
 
     suspend fun removeFlag(
@@ -127,15 +123,6 @@ internal class InMemoryDeploymentStorage : DeploymentStorage {
         }
     }
 
-    override suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
-    ) {
-        return mutex.withLock {
-            flagStorage.getOrPut(deploymentKey) { mutableMapOf() }.putAll(flags.associateBy { it.key })
-        }
-    }
-
     override suspend fun removeFlag(
         deploymentKey: String,
         flagKey: String,
@@ -158,6 +145,11 @@ internal class RedisDeploymentStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
+
+    companion object {
+        val log by logger()
+    }
+
     override suspend fun getDeployment(deploymentKey: String): Deployment? {
         val deploymentJson = redis.hget(RedisKey.Deployments(prefix, projectId), deploymentKey) ?: return null
         return json.decodeFromString(deploymentJson)
@@ -201,15 +193,6 @@ internal class RedisDeploymentStorage(
         redis.hset(RedisKey.FlagConfigs(prefix, projectId, deploymentKey), mapOf(flag.key to flagJson))
     }
 
-    override suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
-    ) {
-        for (flag in flags) {
-            putFlag(deploymentKey, flag)
-        }
-    }
-
     override suspend fun removeFlag(
         deploymentKey: String,
         flagKey: String,
@@ -219,9 +202,9 @@ internal class RedisDeploymentStorage(
 
     override suspend fun removeAllFlags(deploymentKey: String) {
         val redisKey = RedisKey.FlagConfigs(prefix, projectId, deploymentKey)
-        val flags = redis.hgetall(RedisKey.FlagConfigs(prefix, projectId, deploymentKey)) ?: return
-        for (key in flags.keys) {
-            redis.hdel(redisKey, key)
+        val flags = redis.hgetall(redisKey) ?: return
+        for (flagKey in flags.keys) {
+            redis.hdel(redisKey, flagKey)
         }
     }
 }

@@ -4,6 +4,8 @@ services:
     build: .
     ports:
       - "3546:3546"
+      - "9090:9090"
+      - "9999:9999"
     volumes:
       - "./compose-config.yaml:/etc/evaluation-proxy-config.yaml"
   redis:
