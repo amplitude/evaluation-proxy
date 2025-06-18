@@ -19,7 +19,7 @@ internal class DeploymentLoader(
     private val loader = Loader()
 
     suspend fun loadDeployment(deploymentKey: String) {
-        log.info("loadDeployment: - deploymentKey=$deploymentKey")
+        log.debug("loadDeployment: - deploymentKey=$deploymentKey")
         loader.load(deploymentKey) {
             val networkFlags = deploymentApi.getFlagConfigs(deploymentKey)
             // Remove flags that are no longer deployed.
