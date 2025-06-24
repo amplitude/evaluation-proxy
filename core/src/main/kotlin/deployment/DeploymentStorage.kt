@@ -145,9 +145,6 @@ internal class RedisDeploymentStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
-    companion object {
-        val log by logger()
-    }
 
     override suspend fun getDeployment(deploymentKey: String): Deployment? {
         val deploymentJson = redis.hget(RedisKey.Deployments(prefix, projectId), deploymentKey) ?: return null
