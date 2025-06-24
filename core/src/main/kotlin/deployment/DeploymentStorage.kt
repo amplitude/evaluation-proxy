@@ -6,7 +6,6 @@ import com.amplitude.util.Redis
 import com.amplitude.util.RedisConnection
 import com.amplitude.util.RedisKey
 import com.amplitude.util.json
-import com.amplitude.util.logger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -145,7 +144,6 @@ internal class RedisDeploymentStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
-
     override suspend fun getDeployment(deploymentKey: String): Deployment? {
         val deploymentJson = redis.hget(RedisKey.Deployments(prefix, projectId), deploymentKey) ?: return null
         return json.decodeFromString(deploymentJson)
