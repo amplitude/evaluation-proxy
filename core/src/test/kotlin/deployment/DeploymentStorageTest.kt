@@ -3,7 +3,6 @@ package deployment
 import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.deployment.RedisDeploymentStorage
-import com.amplitude.util.RedisKey
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test

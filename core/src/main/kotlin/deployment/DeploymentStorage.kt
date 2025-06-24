@@ -145,7 +145,6 @@ internal class RedisDeploymentStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
 ) : DeploymentStorage {
-
     companion object {
         val log by logger()
     }
