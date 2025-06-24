@@ -31,11 +31,6 @@ internal interface DeploymentStorage {
         flag: EvaluationFlag,
     )
 
-    suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
-    )
-
     suspend fun removeFlag(
         deploymentKey: String,
         flagKey: String,
@@ -127,15 +122,6 @@ internal class InMemoryDeploymentStorage : DeploymentStorage {
         }
     }
 
-    override suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
-    ) {
-        return mutex.withLock {
-            flagStorage.getOrPut(deploymentKey) { mutableMapOf() }.putAll(flags.associateBy { it.key })
-        }
-    }
-
     override suspend fun removeFlag(
         deploymentKey: String,
         flagKey: String,
@@ -201,15 +187,6 @@ internal class RedisDeploymentStorage(
         redis.hset(RedisKey.FlagConfigs(prefix, projectId, deploymentKey), mapOf(flag.key to flagJson))
     }
 
-    override suspend fun putAllFlags(
-        deploymentKey: String,
-        flags: List<EvaluationFlag>,
-    ) {
-        for (flag in flags) {
-            putFlag(deploymentKey, flag)
-        }
-    }
-
     override suspend fun removeFlag(
         deploymentKey: String,
         flagKey: String,
@@ -219,9 +196,9 @@ internal class RedisDeploymentStorage(
 
     override suspend fun removeAllFlags(deploymentKey: String) {
         val redisKey = RedisKey.FlagConfigs(prefix, projectId, deploymentKey)
-        val flags = redis.hgetall(RedisKey.FlagConfigs(prefix, projectId, deploymentKey)) ?: return
-        for (key in flags.keys) {
-            redis.hdel(redisKey, key)
+        val flags = redis.hgetall(redisKey) ?: return
+        for (flagKey in flags.keys) {
+            redis.hdel(redisKey, flagKey)
         }
     }
 }

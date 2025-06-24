@@ -29,6 +29,7 @@ internal fun user(
 internal fun flag(
     flagKey: String = "flag",
     cohortIds: Set<String> = setOf("a"),
+    metadata: Map<String, Any?>? = null,
 ) = EvaluationFlag(
     key = flagKey,
     variants =
@@ -55,6 +56,7 @@ internal fun flag(
                 variant = "off",
             ),
         ),
+    metadata = metadata,
 )
 
 internal fun cohort(
