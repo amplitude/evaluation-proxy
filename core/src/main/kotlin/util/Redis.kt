@@ -84,6 +84,8 @@ internal interface Redis {
         limit: Long,
     ): Set<String>?
 
+    suspend fun smembers(key: RedisKey): Set<String>
+
     suspend fun sismember(
         key: RedisKey,
         value: String,
@@ -234,6 +236,10 @@ internal class RedisConnection(
             return null
         }
         return result
+    }
+
+    override suspend fun smembers(key: RedisKey): Set<String> {
+        return connection.run { smembers(key.value) }
     }
 
     override suspend fun sismember(

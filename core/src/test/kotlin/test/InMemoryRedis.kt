@@ -45,6 +45,10 @@ internal class InMemoryRedis : Redis {
         return sets[key.value]?.toSet()
     }
 
+    override suspend fun smembers(key: RedisKey): Set<String> {
+        return sets[key.value] ?: emptySet()
+    }
+
     override suspend fun sismember(
         key: RedisKey,
         value: String,

@@ -192,7 +192,7 @@ internal class RedisCohortStorage(
         groupType: String,
         groupName: String,
     ): Set<String> {
-        return readOnlyRedis.sscan(RedisKey.UserCohortMemberships(prefix, projectId, groupType, groupName), scanLimit) ?: emptySet()
+        return readOnlyRedis.smembers(RedisKey.UserCohortMemberships(prefix, projectId, groupType, groupName))
     }
 
     override suspend fun putCohort(cohort: Cohort) {
