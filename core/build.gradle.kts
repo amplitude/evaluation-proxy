@@ -56,7 +56,7 @@ publishing {
         create<MavenPublication>("core") {
             groupId = "com.amplitude"
             artifactId = "evaluation-proxy-core"
-            version = "0.9.0"
+            version = "0.9.1"
             from(components["java"])
             pom {
                 name.set("Amplitude Evaluation Proxy")
