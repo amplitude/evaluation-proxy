@@ -3,6 +3,7 @@ package com.amplitude.deployment
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.util.Loader
 import com.amplitude.util.getAllCohortIds
+import com.amplitude.util.getFlagVersion
 import com.amplitude.util.isNewerThan
 import com.amplitude.util.logger
 import kotlinx.coroutines.launch
@@ -19,7 +20,7 @@ internal class DeploymentLoader(
     private val loader = Loader()
 
     suspend fun loadDeployment(deploymentKey: String) {
-        log.debug("loadDeployment: - deploymentKey=$deploymentKey")
+        log.trace("loadDeployment: - deploymentKey=$deploymentKey")
         loader.load(deploymentKey) {
             val networkFlags = deploymentApi.getFlagConfigs(deploymentKey)
             // Remove flags that are no longer deployed.
@@ -37,6 +38,7 @@ internal class DeploymentLoader(
                 val storageFlag = storageFlags[flag.key]
                 // Download cohorts for flags with cohorts and put the flag into storage
                 if (!flag.isNewerThan(storageFlag)) continue
+                log.debug("Found newer flag: ${flag.key} v${flag.getFlagVersion()} newer than v${storageFlag?.getFlagVersion()}")
                 if (cohortIds.isNotEmpty()) {
                     launch {
                         cohortLoader.loadCohorts(cohortIds)
@@ -47,6 +49,6 @@ internal class DeploymentLoader(
                 }
             }
         }
-        log.debug("loadDeployment: end - deploymentKey=$deploymentKey")
+        log.trace("loadDeployment: end - deploymentKey=$deploymentKey")
     }
 }
