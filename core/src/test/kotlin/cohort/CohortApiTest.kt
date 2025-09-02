@@ -234,4 +234,41 @@ class CohortApiTest {
             assertEquals(5, mockEngine.responseHistory.size)
             assertEquals(expected, actual)
         }
+
+    @Test
+    fun `streaming cohort without size computes size from memberIds`(): Unit =
+        runBlocking {
+            val cohortId = "stream-a"
+            val groupType = "User"
+            val lastModified = 1234L
+            val members = listOf("1", "2", "3")
+            val jsonBody =
+                """
+                {
+                  "cohortId": "$cohortId",
+                  "groupType": "$groupType",
+                  "lastModified": $lastModified,
+                  "memberIds": [${members.joinToString(separator = ",") { "\"$it\"" }}]
+                }
+                """.trimIndent()
+
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = ByteReadChannel(jsonBody),
+                        status = HttpStatusCode.OK,
+                    )
+                }
+            val api = CohortApiV1(serverUrl, apiKey, secretKey, mockEngine)
+            val storage = com.amplitude.cohort.InMemoryCohortStorage()
+
+            api.streamCohort(cohortId, null, Int.MAX_VALUE, storage)
+
+            val stored = storage.getCohort(cohortId)
+            assertEquals(cohortId, stored?.id)
+            assertEquals(groupType, stored?.groupType)
+            assertEquals(lastModified, stored?.lastModified)
+            assertEquals(members.toSet(), stored?.members)
+            assertEquals(members.size, stored?.size)
+        }
 }

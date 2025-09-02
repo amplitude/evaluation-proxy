@@ -37,6 +37,8 @@ dependencies {
     implementation("io.lettuce:lettuce-core:$lettuce")
     implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    implementation("com.squareup.okio:okio:3.9.0")
+    implementation("com.squareup.moshi:moshi:1.15.1")
     implementation("com.charleskorn.kaml:kaml:$kaml")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
     testImplementation("io.mockk:mockk:$mockk")

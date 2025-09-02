@@ -6,7 +6,7 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.cohort.toCohortDescription
-import com.amplitude.util.RedisKey
+import com.amplitude.util.redis.RedisKey
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
 import test.cohort
@@ -52,8 +52,12 @@ class CohortStorageTest {
             // test get memberships, empty
             var memberships: Set<String> = cohortStorage.getCohortMemberships(groupType, groupName)
             assertEquals(0, memberships.size)
-            // test put, get, cohort
-            cohortStorage.putCohort(cohortA)
+            // seed via writer
+            run {
+                val acc = cohortStorage.createWriter(cohortA.toCohortDescription())
+                acc.addMembers(cohortA.members.toList())
+                acc.complete(cohortA.members.size)
+            }
             cohort = cohortStorage.getCohort(cohortA.id)
             assertEquals(cohortA, cohort)
             // test get description, description
@@ -62,8 +66,12 @@ class CohortStorageTest {
             // test get memberships, memberships
             memberships = cohortStorage.getCohortMemberships(groupType, groupName)
             assertEquals(setOf(cohortA.id), memberships)
-            // test put, get all, cohorts
-            cohortStorage.putCohort(cohortB)
+            // seed via writer
+            run {
+                val acc = cohortStorage.createWriter(cohortB.toCohortDescription())
+                acc.addMembers(cohortB.members.toList())
+                acc.complete(cohortB.members.size)
+            }
             cohorts = cohortStorage.getCohorts()
             assertEquals(
                 mapOf(
@@ -124,15 +132,24 @@ class CohortStorageTest {
     fun `test redis, put cohort, users memberships exist in redis`(): Unit =
         runBlocking {
             val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000)
-            // put cohort
+            // put cohort via writer
             val cohort = cohort("a", lastModified = 1, members = setOf("1", "2", "3"))
-            cohortStorage.putCohort(cohort)
+            run {
+                val acc = cohortStorage.createWriter(cohort.toCohortDescription())
+                acc.addMembers(cohort.members.toList())
+                acc.complete(cohort.members.size)
+            }
             // check cohort membership
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
                 assertEquals(setOf(cohort.id), it)
             }
-            // put updated cohort
-            cohortStorage.putCohort(cohort("a", lastModified = 2, members = setOf("1", "2")))
+            // put updated cohort via writer
+            run {
+                val cohort2 = cohort("a", lastModified = 2, members = setOf("1", "2"))
+                val acc = cohortStorage.createWriter(cohort2.toCohortDescription())
+                acc.addMembers(cohort2.members.toList())
+                acc.complete(cohort2.members.size)
+            }
             // check cohort membership exists
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
                 assertEquals(setOf(cohort.id), it)
@@ -153,5 +170,41 @@ class CohortStorageTest {
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "3"), 1000)?.let {
                 assertEquals(0, it.size)
             }
+        }
+
+    @Test
+    fun `test redis, put large cohort, no OutOfMemoryError`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000)
+            // Create a large cohort with 10,000 members to simulate memory pressure
+            val largeMembers = (1..10000).map { "user_$it" }.toSet()
+            val largeCohort = cohort("large", lastModified = 1, members = largeMembers)
+
+            // This should not throw OutOfMemoryError due to batching
+            run {
+                val acc = cohortStorage.createWriter(largeCohort.toCohortDescription())
+                // stream in chunks
+                largeMembers.chunked(1000).forEach { acc.addMembers(it) }
+                acc.complete(largeMembers.size)
+            }
+
+            // Verify the cohort was stored correctly
+            val retrievedCohort = cohortStorage.getCohort("large")
+            assertEquals(largeCohort, retrievedCohort)
+            assertEquals(largeMembers.size, retrievedCohort?.members?.size)
+        }
+
+    @Test
+    fun `stream writer stores final size from member count`(): Unit =
+        runBlocking {
+            val storage: CohortStorage = InMemoryCohortStorage()
+            val description = CohortDescription(id = "s1", groupType = "User", size = 0, lastModified = 42)
+            val acc = storage.createWriter(description)
+            acc.addMembers(listOf("u1", "u2"))
+            acc.addMembers(listOf("u3"))
+            acc.complete(3)
+            val stored = storage.getCohort("s1")
+            assertEquals(3, stored?.size)
+            assertEquals(setOf("u1", "u2", "u3"), stored?.members)
         }
 }

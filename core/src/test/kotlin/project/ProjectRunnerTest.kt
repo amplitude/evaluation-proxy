@@ -78,7 +78,10 @@ class ProjectRunnerTest {
             val cohortStorage =
                 spyk<CohortStorage>(
                     InMemoryCohortStorage().apply {
-                        putCohort(cohort("aa"))
+                        val c = cohort("aa")
+                        val acc = createWriter(c.toCohortDescription())
+                        acc.addMembers(c.members.toList())
+                        acc.complete(c.members.size)
                     },
                 )
             coEvery { projectApi.getDeployments() } returns listOf(deployment("b"))

@@ -2,9 +2,9 @@ package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
 import com.amplitude.experiment.evaluation.EvaluationFlag
-import com.amplitude.util.Redis
-import com.amplitude.util.RedisConnection
-import com.amplitude.util.RedisKey
+import com.amplitude.util.redis.Redis
+import com.amplitude.util.redis.RedisKey
+import com.amplitude.util.redis.createRedisConnections
 import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,27 +43,16 @@ internal fun getDeploymentStorage(
     projectId: String,
     redisConfiguration: RedisConfiguration?,
 ): DeploymentStorage {
-    val uri = redisConfiguration?.uri
-    return if (uri == null) {
-        InMemoryDeploymentStorage()
+    val connections = createRedisConnections(redisConfiguration)
+    return if (connections != null) {
+        RedisDeploymentStorage(
+            redisConfiguration!!.prefix,
+            projectId,
+            connections.primary,
+            connections.readOnly,
+        )
     } else {
-        val redis =
-            RedisConnection(
-                uri,
-                redisConfiguration.connectionTimeoutMillis,
-                redisConfiguration.commandTimeoutMillis,
-            )
-        val readOnlyRedis =
-            if (redisConfiguration.readOnlyUri != null) {
-                RedisConnection(
-                    redisConfiguration.readOnlyUri,
-                    redisConfiguration.connectionTimeoutMillis,
-                    redisConfiguration.commandTimeoutMillis,
-                )
-            } else {
-                redis
-            }
-        RedisDeploymentStorage(redisConfiguration.prefix, projectId, redis, readOnlyRedis)
+        InMemoryDeploymentStorage()
     }
 }
 

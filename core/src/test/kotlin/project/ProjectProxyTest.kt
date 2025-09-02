@@ -5,6 +5,7 @@ import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.GetCohortResponse
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.deployment.InMemoryDeploymentStorage
+import com.amplitude.cohort.toCohortDescription
 import com.amplitude.project.ProjectProxy
 import com.amplitude.util.json
 import io.ktor.http.HttpStatusCode
@@ -91,7 +92,9 @@ class ProjectProxyTest {
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -114,7 +117,9 @@ class ProjectProxyTest {
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -137,7 +142,9 @@ class ProjectProxyTest {
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -164,7 +171,9 @@ class ProjectProxyTest {
                 }
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -187,7 +196,9 @@ class ProjectProxyTest {
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -270,7 +281,9 @@ class ProjectProxyTest {
                 }
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
@@ -338,7 +351,9 @@ class ProjectProxyTest {
                 }
             val cohortStorage =
                 InMemoryCohortStorage().apply {
-                    putCohort(cohort)
+                    val acc = createWriter(cohort.toCohortDescription())
+                    acc.addMembers(cohort.members.toList())
+                    acc.complete(cohort.members.size)
                 }
             val projectProxy =
                 ProjectProxy(
