@@ -14,8 +14,7 @@ import kotlinx.serialization.encodeToString
 import kotlin.time.Duration
 
 // Constants
-private const val REDIS_MEMBERSHIP_PIPELINE_CHUNK: Int = 500
-private const val REDIS_DELETE_PIPELINE_CHUNK: Int = 1000
+private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
 
 @Serializable
 internal data class CohortDescription(
@@ -73,7 +72,7 @@ internal interface CohortStorage {
      */
     suspend fun tryLockCohortLoading(
         cohortId: String,
-        lockTimeoutSeconds: Int = 300,
+        lockTimeoutSeconds: Int
     ): Boolean
 
     /**
@@ -103,6 +102,7 @@ internal fun getCohortStorage(
             connections.primary,
             connections.readOnly,
             redisConfiguration.scanLimit,
+            redisConfiguration.pipelineBatchSize,
         )
     } else {
         InMemoryCohortStorage()
@@ -188,9 +188,38 @@ internal class RedisCohortStorage(
     private val redis: Redis,
     private val readOnlyRedis: Redis,
     private val scanLimit: Long,
+    private val pipelineBatchSize: Int,
 ) : CohortStorage {
     companion object {
         val log by logger()
+    }
+
+    /**
+     * Stream a Redis Set via SSCAN and pipeline membership updates in sub-batches.
+     * The provided [pipeline] function is invoked once per SSCAN chunk with the
+     * mapped updates and the configured [pipelineBatchSize].
+     */
+    private suspend fun processMembershipUpdates(
+        sourceKey: RedisKey,
+        groupType: String,
+        cohortId: String,
+        pipeline: suspend (updates: List<Pair<RedisKey, Set<String>>>, batchSize: Int) -> Unit,
+    ) {
+        val cohortIdSet = setOf(cohortId)
+        redis.sscanChunked(sourceKey, chunkSize = REDIS_SCAN_CHUNK_SIZE) { userChunk ->
+            if (userChunk.isEmpty()) return@sscanChunked
+            val updates = userChunk.map { userId ->
+                RedisKey.UserCohortMemberships(
+                    prefix,
+                    projectId,
+                    groupType,
+                    userId,
+                ) to cohortIdSet
+            }
+            if (updates.isNotEmpty()) {
+                pipeline(updates, pipelineBatchSize)
+            }
+        }
     }
 
     override suspend fun getCohort(cohortId: String): Cohort? {
@@ -236,22 +265,18 @@ internal class RedisCohortStorage(
 
     override suspend fun deleteCohort(description: CohortDescription) {
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
-        val members = getCohortMembers(description.id, description.groupType, description.lastModified) ?: emptySet()
-        redis.sremPipeline(
-            members.map {
-                RedisKey.UserCohortMemberships(prefix, projectId, description.groupType, it) to setOf(description.id)
-            },
-            REDIS_DELETE_PIPELINE_CHUNK,
-        )
-        redis.del(
+        val cohortMembersKey =
             RedisKey.CohortMembers(
                 prefix,
                 projectId,
                 description.id,
                 description.groupType,
                 description.lastModified,
-            ),
-        )
+            )
+        processMembershipUpdates(cohortMembersKey, description.groupType, description.id) { updates, batchSize ->
+            redis.sremPipeline(updates, batchSize)
+        }
+        redis.del(cohortMembersKey)
     }
 
     override fun createWriter(description: CohortDescription): CohortIngestionWriter {
@@ -270,6 +295,11 @@ internal class RedisCohortStorage(
                 if (existingDescription == null) {
                     existingDescription = getCohortDescription(description.id)
                 }
+                // If nothing changed (same or older lastModified), skip creating/updating the temp set
+                val prev = existingDescription
+                if (prev != null && description.lastModified <= prev.lastModified) {
+                    return
+                }
                 if (members.isNotEmpty()) {
                     redis.sadd(newCohortKey, members.toSet())
                 }
@@ -278,7 +308,7 @@ internal class RedisCohortStorage(
             override suspend fun complete(finalSize: Int) {
                 val prev = existingDescription
                 log.debug("cohort={} complete: finalSize={}", description.id, finalSize)
-                
+
                 // Only process members if the cohort has any (avoid empty cohort operations)
                 if (finalSize > 0) {
                     if (prev != null) {
@@ -318,35 +348,17 @@ internal class RedisCohortStorage(
                                 removedCount,
                             )
 
-                            // Process added users in chunks to avoid memory spikes
+                            // Process added users in streamed chunks
                             if (addedCount > 0) {
-                                redis.sscanChunked(addedKey, chunkSize = REDIS_MEMBERSHIP_PIPELINE_CHUNK) { userChunk ->
-                                    val membershipUpdates =
-                                        userChunk.map { userId ->
-                                            RedisKey.UserCohortMemberships(
-                                                prefix,
-                                                projectId,
-                                                description.groupType,
-                                                userId,
-                                            ) to setOf(description.id)
-                                        }
-                                    redis.saddPipeline(membershipUpdates, REDIS_MEMBERSHIP_PIPELINE_CHUNK)
+                                processMembershipUpdates(addedKey, description.groupType, description.id) { updates, batchSize ->
+                                    redis.saddPipeline(updates, batchSize)
                                 }
                             }
 
-                            // Process removed users in chunks
+                            // Process removed users in streamed chunks
                             if (removedCount > 0) {
-                                redis.sscanChunked(removedKey, chunkSize = REDIS_MEMBERSHIP_PIPELINE_CHUNK) { userChunk ->
-                                    val membershipUpdates =
-                                        userChunk.map { userId ->
-                                            RedisKey.UserCohortMemberships(
-                                                prefix,
-                                                projectId,
-                                                description.groupType,
-                                                userId,
-                                            ) to setOf(description.id)
-                                        }
-                                    redis.sremPipeline(membershipUpdates, REDIS_MEMBERSHIP_PIPELINE_CHUNK)
+                                processMembershipUpdates(removedKey, description.groupType, description.id) { updates, batchSize ->
+                                    redis.sremPipeline(updates, batchSize)
                                 }
                             }
                         } finally {
@@ -356,19 +368,9 @@ internal class RedisCohortStorage(
                             redis.expire(existingCohortKey, ttl)
                         }
                     } else {
-                        // When there is no existing cohort, all members are new additions
-                        // Process all cohort members and add them to UserCohortMemberships
-                        redis.sscanChunked(newCohortKey, chunkSize = REDIS_MEMBERSHIP_PIPELINE_CHUNK) { userChunk ->
-                            val membershipUpdates =
-                                userChunk.map { userId ->
-                                    RedisKey.UserCohortMemberships(
-                                        prefix,
-                                        projectId,
-                                        description.groupType,
-                                        userId,
-                                    ) to setOf(description.id)
-                                }
-                            redis.saddPipeline(membershipUpdates, REDIS_MEMBERSHIP_PIPELINE_CHUNK)
+                        // No previous cohort: all members are additions
+                        processMembershipUpdates(newCohortKey, description.groupType, description.id) { updates, batchSize ->
+                            redis.saddPipeline(updates, batchSize)
                         }
                     }
                 }

@@ -14,6 +14,8 @@ ENV JAVA_OPTS="-Dcom.sun.management.jmxremote \
                -Dcom.sun.management.jmxremote.authenticate=false \
                -Dcom.sun.management.jmxremote.ssl=false \
                -Dcom.sun.management.jmxremote.rmi.port=9999 \
-               -Djava.rmi.server.hostname=0.0.0.0"
+               -XX:+UnlockDiagnosticVMOptions -XX:NativeMemoryTracking=summary \
+               -XX:+UnlockDiagnosticVMOptions -XX:NativeMemoryTracking=detail \
+               -Djava.rmi.server.hostname=127.0.0.1"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /amp/evaluation-proxy.jar"]

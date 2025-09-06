@@ -28,7 +28,7 @@ internal class CohortLoader(
     private suspend fun loadCohort(cohortId: String) {
         log.trace("loadCohort: start - cohortId={}", cohortId)
         loader.load(cohortId) {
-            val lockAcquired = cohortStorage.tryLockCohortLoading(cohortId, 300)
+            val lockAcquired = cohortStorage.tryLockCohortLoading(cohortId, 900) // 15 minutes
             if (!lockAcquired) {
                 log.info("loadCohort: cohort {} is already being loaded by another instance, skipping", cohortId)
                 return@load

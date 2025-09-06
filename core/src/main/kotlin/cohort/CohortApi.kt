@@ -188,6 +188,8 @@ internal class CohortApiV1(
                     }
                 }
 
+                val existingLastModified = storage.getCohortDescription(cohortId)?.lastModified ?: 0L
+
                 input.use {
                     reader.use {
                         reader.beginObject()
@@ -198,6 +200,14 @@ internal class CohortApiV1(
                                 "groupType" -> parsedGroupType = reader.nextString()
                                 "lastModified" -> parsedLastModified = reader.nextLong()
                                 "memberIds" -> {
+                                    // Short-circuit: if cohort timestamp is unchanged, avoid reading the array
+                                    val id = parsedCohortId
+                                    val lm = parsedLastModified
+                                    if (id != null && lm != null) {
+                                        if (lm <= existingLastModified) {
+                                            throw CohortNotModifiedException(id)
+                                        }
+                                    }
                                     ensureWriter()
                                     reader.beginArray()
                                     while (reader.hasNext()) {
