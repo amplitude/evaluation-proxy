@@ -23,10 +23,15 @@ internal fun createRedisConnections(redisConfiguration: RedisConfiguration?): Re
                 redisConfiguration.uri,
                 redisConfiguration.connectionTimeoutMillis,
                 redisConfiguration.commandTimeoutMillis,
+                null,
             )
-            // For cluster mode, read-only replica is not typically configured separately
-            // All nodes in cluster can handle reads, so we use the same connection
-            val readOnlyRedis = redis
+            // Create a dedicated read-only client using replicas only for read isolation
+            val readOnlyRedis = RedisClusterConnection(
+                redisConfiguration.readOnlyUri ?: redisConfiguration.uri,
+                redisConfiguration.connectionTimeoutMillis,
+                redisConfiguration.commandTimeoutMillis,
+                io.lettuce.core.ReadFrom.REPLICA_PREFERRED,
+            )
             RedisConnections(redis, readOnlyRedis)
         }
         

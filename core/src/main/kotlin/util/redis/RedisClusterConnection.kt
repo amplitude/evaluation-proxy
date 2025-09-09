@@ -9,6 +9,10 @@ import io.lettuce.core.RedisFuture
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
 import io.lettuce.core.cluster.RedisClusterClient
+import io.lettuce.core.ReadFrom
+import io.lettuce.core.cluster.ClusterClientOptions
+import io.lettuce.core.cluster.ClusterTopologyRefreshOptions
+import io.lettuce.core.TimeoutOptions
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection
 import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands
 import io.lettuce.core.codec.StringCodec
@@ -24,11 +28,13 @@ internal class RedisClusterConnection(
     clusterUri: String,
     connectionTimeoutMillis: Long = 10000L,
     commandTimeoutMillis: Long = 5000L,
+    readFrom: ReadFrom? = null,
 ) : Redis {
     private val pipelineConnection: Deferred<StatefulRedisClusterConnection<String, String>>
     private val pipelineContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val connection: Deferred<StatefulRedisClusterConnection<String, String>>
     private val client: RedisClusterClient
+    private val desiredReadFrom: ReadFrom? = readFrom
     
     // Track active lock values for safe release
     private val activeLocks = mutableMapOf<String, String>()
@@ -44,6 +50,27 @@ internal class RedisClusterConnection(
         }
 
         client = RedisClusterClient.create(uri)
+
+        // Enable adaptive and periodic topology refresh so newly available replicas
+        // are discovered and used automatically with ReadFrom.REPLICA_PREFERRED
+        val topologyRefreshOptions =
+            ClusterTopologyRefreshOptions.builder()
+                .enableAllAdaptiveRefreshTriggers()
+                .refreshPeriod(JavaDuration.ofSeconds(30))
+                .build()
+
+        val clientOptions =
+            ClusterClientOptions.builder()
+                .topologyRefreshOptions(topologyRefreshOptions)
+                .timeoutOptions(
+                    TimeoutOptions.builder()
+                        .fixedTimeout(JavaDuration.ofMillis(commandTimeoutMillis))
+                        .build(),
+                )
+                .autoReconnect(true)
+                .build()
+
+        client.setOptions(clientOptions)
 
         client.partitions
 
@@ -304,7 +331,13 @@ internal class RedisClusterConnection(
         block: suspend RedisAdvancedClusterAsyncCommands<String, String>.() -> List<RedisFuture<*>>,
     ) {
         withContext(pipelineContext) {
-            val commands = pipelineConnection.await().async()
+            val conn = pipelineConnection.await()
+            if (desiredReadFrom != null) {
+                try {
+                    conn.setReadFrom(desiredReadFrom)
+                } catch (_: Throwable) {}
+            }
+            val commands = conn.async()
             commands.setAutoFlushCommands(false)
             val futures = try {
                 block.invoke(commands)
@@ -320,7 +353,13 @@ internal class RedisClusterConnection(
         crossinline action: RedisAdvancedClusterAsyncCommands<String, String>.() -> RedisFuture<R>,
     ): R {
         return Metrics.with({ RedisCommand }, { e -> RedisCommandFailure(e) }) {
-            await().async().action().asDeferred().await()
+            val conn = await()
+            if (desiredReadFrom != null) {
+                try {
+                    conn.setReadFrom(desiredReadFrom)
+                } catch (_: Throwable) {}
+            }
+            conn.async().action().asDeferred().await()
         }
     }
 }
