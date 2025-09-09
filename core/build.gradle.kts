@@ -1,11 +1,17 @@
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinJvm
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "2.0.0"
+    kotlin("jvm")
     kotlin("plugin.serialization") version "2.0.0"
-    `maven-publish`
-    signing
+    id("com.vanniktech.maven.publish") version "0.34.0"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jetbrains.dokka") version "1.9.20"
+}
+
+repositories {
+    mavenCentral()
 }
 
 java {
@@ -47,58 +53,46 @@ dependencies {
 
 // Publishing
 
-java {
-    withSourcesJar()
-    withJavadocJar()
-}
+group = "com.amplitude"
+version = "0.10.0"
 
-publishing {
-    @Suppress("LocalVariableName")
-    publications {
-        create<MavenPublication>("core") {
-            groupId = "com.amplitude"
-            artifactId = "evaluation-proxy-core"
-            version = "0.9.1"
-            from(components["java"])
-            pom {
-                name.set("Amplitude Evaluation Proxy")
-                description.set("Core package for Amplitude's evaluation proxy.")
-                url.set("https://github.com/amplitude/evaluation-proxy")
-                licenses {
-                    license {
-                        name.set("MIT")
-                        url.set("https://opensource.org/licenses/MIT")
-                        distribution.set("repo")
-                    }
-                }
-                developers {
-                    developer {
-                        id.set("amplitude")
-                        name.set("Amplitude")
-                        email.set("dev@amplitude.com")
-                    }
-                }
-                scm {
-                    url.set("https://github.com/amplitude/evaluation-proxy")
-                    connection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
-                    developerConnection.set("scm:git@github.com:amplitude/evaluation-proxy.git")
-                }
+mavenPublishing {
+    coordinates(
+        group as String?,
+        "evaluation-proxy-core",
+        version as String?,
+    )
+
+    configure(
+        KotlinJvm(
+            javadocJar = JavadocJar.Dokka("dokkaHtml"),
+            sourcesJar = true,
+        ),
+    )
+
+    pom {
+        name.set("Amplitude Evaluation Proxy")
+        description.set("Core package for Amplitude's evaluation proxy.")
+        url.set("https://github.com/amplitude/evaluation-proxy")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
+                distribution.set("repo")
             }
         }
+        developers {
+            developer {
+                id.set("amplitude")
+                name.set("Amplitude")
+                email.set("dev@amplitude.com")
+            }
+        }
+        scm {
+            url.set("https://github.com/amplitude/evaluation-proxy")
+        }
     }
-}
 
-signing {
-    val publishing = extensions.findByType<PublishingExtension>()
-    val signingKey = System.getenv("SIGNING_KEY")
-    val signingPassword = System.getenv("SIGNING_PASSWORD")
-    useInMemoryPgpKeys(signingKey, signingPassword)
-    sign(publishing?.publications)
+    publishToMavenCentral()
+    signAllPublications()
 }
-
-tasks.withType<Sign>().configureEach {
-    onlyIf { isReleaseBuild }
-}
-
-val isReleaseBuild: Boolean
-    get() = System.getenv("SIGNING_KEY") != null
