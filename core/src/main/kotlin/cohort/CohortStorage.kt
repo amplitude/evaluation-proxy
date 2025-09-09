@@ -1,11 +1,11 @@
 package com.amplitude.cohort
 
 import com.amplitude.RedisConfiguration
+import com.amplitude.util.json
+import com.amplitude.util.logger
 import com.amplitude.util.redis.Redis
 import com.amplitude.util.redis.RedisKey
 import com.amplitude.util.redis.createRedisConnections
-import com.amplitude.util.json
-import com.amplitude.util.logger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
@@ -72,7 +72,7 @@ internal interface CohortStorage {
      */
     suspend fun tryLockCohortLoading(
         cohortId: String,
-        lockTimeoutSeconds: Int
+        lockTimeoutSeconds: Int,
     ): Boolean
 
     /**
@@ -208,14 +208,15 @@ internal class RedisCohortStorage(
         val cohortIdSet = setOf(cohortId)
         redis.sscanChunked(sourceKey, chunkSize = REDIS_SCAN_CHUNK_SIZE) { userChunk ->
             if (userChunk.isEmpty()) return@sscanChunked
-            val updates = userChunk.map { userId ->
-                RedisKey.UserCohortMemberships(
-                    prefix,
-                    projectId,
-                    groupType,
-                    userId,
-                ) to cohortIdSet
-            }
+            val updates =
+                userChunk.map { userId ->
+                    RedisKey.UserCohortMemberships(
+                        prefix,
+                        projectId,
+                        groupType,
+                        userId,
+                    ) to cohortIdSet
+                }
             if (updates.isNotEmpty()) {
                 pipeline(updates, pipelineBatchSize)
             }

@@ -171,7 +171,7 @@ data class RedisConfiguration(
         fun fromEnv(): RedisConfiguration? {
             val redisUri = stringEnv(EnvKey.REDIS_URI, Default.REDIS_URI)
             val useCluster = booleanEnv(EnvKey.REDIS_USE_CLUSTER, Default.REDIS_USE_CLUSTER)
-            
+
             return if (redisUri != null) {
                 val redisReadOnlyUri = stringEnv(EnvKey.REDIS_READ_ONLY_URI, Default.REDIS_READ_ONLY_URI) ?: redisUri
                 val redisPrefix = stringEnv(EnvKey.REDIS_PREFIX, Default.REDIS_PREFIX)!!
@@ -179,7 +179,7 @@ data class RedisConfiguration(
                 val connectionTimeoutMillis = longEnv(EnvKey.REDIS_CONNECTION_TIMEOUT_MILLIS, Default.REDIS_CONNECTION_TIMEOUT_MILLIS)!!
                 val commandTimeoutMillis = longEnv(EnvKey.REDIS_COMMAND_TIMEOUT_MILLIS, Default.REDIS_COMMAND_TIMEOUT_MILLIS)!!
                 val pipelineBatchSize = intEnv(EnvKey.REDIS_PIPELINE_BATCH_SIZE, Default.REDIS_PIPELINE_BATCH_SIZE)!!
-                
+
                 RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,

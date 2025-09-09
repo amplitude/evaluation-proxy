@@ -30,7 +30,7 @@ internal class CohortLoader(
         loader.load(cohortId) {
             val lockAcquired = cohortStorage.tryLockCohortLoading(cohortId, 900) // 15 minutes
             if (!lockAcquired) {
-                log.info("loadCohort: cohort {} is already being loaded by another instance, skipping", cohortId)
+                log.debug("loadCohort: cohort {} is already being loaded by another instance, skipping", cohortId)
                 return@load
             }
             try {
@@ -45,7 +45,7 @@ internal class CohortLoader(
                             log.info("Cohort download/save completed. {}", updated)
                         }
                     } catch (_: CohortNotModifiedException) {
-                       log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
+                        log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
                     }
                 } catch (t: Throwable) {
                     // Don't throw if we fail to download the cohort. We

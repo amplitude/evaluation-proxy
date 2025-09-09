@@ -4,8 +4,8 @@ import com.amplitude.Configuration
 import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.GetCohortResponse
 import com.amplitude.cohort.InMemoryCohortStorage
-import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.cohort.toCohortDescription
+import com.amplitude.deployment.InMemoryDeploymentStorage
 import com.amplitude.project.ProjectProxy
 import com.amplitude.util.json
 import io.ktor.http.HttpStatusCode

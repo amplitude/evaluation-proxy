@@ -1,20 +1,12 @@
 package cohort
 
-import com.amplitude.cohort.Cohort
 import com.amplitude.cohort.CohortApi
 import com.amplitude.cohort.CohortLoader
-import com.amplitude.cohort.CohortNotModifiedException
 import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.InMemoryCohortStorage
-import com.amplitude.util.HttpErrorException
-import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.spyk
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals

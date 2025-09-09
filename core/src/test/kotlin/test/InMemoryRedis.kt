@@ -171,7 +171,7 @@ internal class InMemoryRedis : Redis {
     override suspend fun releaseLock(key: RedisKey): Boolean {
         val keyStr = key.value
         val expectedValue = activeLocks.remove(keyStr)
-        
+
         return if (expectedValue != null) {
             val currentValue = kv[keyStr]
             if (currentValue == expectedValue) {

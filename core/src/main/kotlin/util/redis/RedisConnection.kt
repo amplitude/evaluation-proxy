@@ -32,7 +32,7 @@ internal class RedisConnection(
     private val pipelineContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val connection: Deferred<StatefulRedisConnection<String, String>>
     private val client: RedisClient
-    
+
     // Track active lock values for safe release
     private val activeLocks = mutableMapOf<String, String>()
 
@@ -276,64 +276,67 @@ internal class RedisConnection(
         ttlSeconds: Long,
     ): Boolean {
         // Generate unique lock value internally
-        val lockValue = "${System.currentTimeMillis()}-${Thread.currentThread().id}-${java.util.UUID.randomUUID()}"
-        
-        val result = connection.run {
-            set(key.value, lockValue, io.lettuce.core.SetArgs().ex(ttlSeconds).nx())
-        }
-        
+        val lockValue = "${'$'}{System.currentTimeMillis()}-${'$'}{Thread.currentThread().id}-${'$'}{java.util.UUID.randomUUID()}"
+
+        val result =
+            connection.run {
+                set(key.value, lockValue, io.lettuce.core.SetArgs().ex(ttlSeconds).nx())
+            }
+
         val acquired = result == "OK"
         if (acquired) {
             synchronized(activeLocks) {
                 activeLocks[key.value] = lockValue
             }
         }
-        
+
         return acquired
     }
 
     override suspend fun releaseLock(key: RedisKey): Boolean {
-        val lockValue = synchronized(activeLocks) {
-            activeLocks.remove(key.value)
-        }
-        
+        val lockValue =
+            synchronized(activeLocks) {
+                activeLocks.remove(key.value)
+            }
+
         return if (lockValue != null) {
             // Use Lua script for atomic compare-and-delete
-            val luaScript = """
+            val luaScript =
+                """
                 if redis.call("GET", KEYS[1]) == ARGV[1] then
                     return redis.call("DEL", KEYS[1])
                 else
                     return 0
                 end
-            """.trimIndent()
-            
-            val result = connection.run {
-                eval<Long>(luaScript, io.lettuce.core.ScriptOutputType.INTEGER, arrayOf(key.value), lockValue)
-            }
-            
+                """.trimIndent()
+
+            val result =
+                connection.run {
+                    eval<Long>(luaScript, io.lettuce.core.ScriptOutputType.INTEGER, arrayOf(key.value), lockValue)
+                }
+
             val released = result == 1L
             if (!released) {
-                log.warn("Failed to release lock for key ${key.value} - lock may have expired or been taken by another process")
+                log.warn("Failed to release lock for key ${'$'}{key.value} - lock may have expired or been taken by another process")
             }
             released
         } else {
-            log.warn("Attempted to release lock for key ${key.value} but no active lock found")
+            log.warn("Attempted to release lock for key ${'$'}{key.value} but no active lock found")
             false
         }
     }
 
-    private suspend fun pipeline(
-        block: RedisAsyncCommands<String, String>.() -> List<RedisFuture<*>>,
-    ) {
+    private suspend fun pipeline(block: RedisAsyncCommands<String, String>.() -> List<RedisFuture<*>>) {
         withContext(pipelineContext) {
             val connection = pipelineConnection.await()
             connection.setAutoFlushCommands(false)
-            val futures = try {
-                block.invoke(connection.async())
-            } finally {
-                // Always flush whatever we queued before awaiting results
-                connection.flushCommands()
-            }
+            val futures =
+                try {
+                    block.invoke(connection.async())
+                } finally {
+                    // Always flush whatever we queued before awaiting results
+                    connection.flushCommands()
+                }
             // Await completion of the batch to avoid unbounded in-flight replies
             futures.forEach { future ->
                 future.asDeferred().await()

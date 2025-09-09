@@ -84,7 +84,7 @@ internal class CohortApiV1(
 ) : CohortApi {
     companion object {
         val log by logger()
-        const val batchSize: Int = 1000
+        const val BATCH_SIZE: Int = 1000
     }
 
     private val token = Base64.getEncoder().encodeToString("$apiKey:$secretKey".toByteArray(Charsets.UTF_8))
@@ -168,7 +168,7 @@ internal class CohortApiV1(
                 var parsedGroupType: String? = null
                 var parsedLastModified: Long? = null
                 var writer: CohortIngestionWriter? = null
-                val batch = ArrayList<String>(batchSize)
+                val batch = ArrayList<String>(BATCH_SIZE)
                 var memberCount = 0
 
                 fun ensureWriter() {
@@ -213,7 +213,7 @@ internal class CohortApiV1(
                                     while (reader.hasNext()) {
                                         batch.add(reader.nextString())
                                         memberCount += 1
-                                        if (batch.size >= batchSize) {
+                                        if (batch.size >= BATCH_SIZE) {
                                             writer!!.addMembers(batch)
                                             batch.clear()
                                         }

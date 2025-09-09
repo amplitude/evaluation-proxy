@@ -2,10 +2,10 @@ package com.amplitude.deployment
 
 import com.amplitude.RedisConfiguration
 import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.util.json
 import com.amplitude.util.redis.Redis
 import com.amplitude.util.redis.RedisKey
 import com.amplitude.util.redis.createRedisConnections
-import com.amplitude.util.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
