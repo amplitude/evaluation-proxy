@@ -27,10 +27,7 @@ internal sealed class RedisKey(val value: String) {
         val cohortId: String,
         val cohortGroupType: String,
         val cohortLastModified: Long,
-    ) : RedisKey(
-        // Cluster hash tag ensures all cohort member versions share the same slot
-        "$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:$cohortGroupType:$cohortLastModified",
-    )
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:$cohortGroupType:$cohortLastModified")
 
     data class UserCohortMemberships(
         val prefix: String,
@@ -54,7 +51,5 @@ internal sealed class RedisKey(val value: String) {
         val projectId: String,
         val cohortId: String,
         val suffix: String,
-    ) : RedisKey(
-        "$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:temp:$suffix",
-    )
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:temp:$suffix")
 }
