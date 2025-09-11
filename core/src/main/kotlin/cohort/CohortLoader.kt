@@ -28,25 +28,33 @@ internal class CohortLoader(
     private suspend fun loadCohort(cohortId: String) {
         log.trace("loadCohort: start - cohortId={}", cohortId)
         loader.load(cohortId) {
+            val lockAcquired = cohortStorage.tryLockCohortLoading(cohortId, 900) // 15 minutes
+            if (!lockAcquired) {
+                log.debug("loadCohort: cohort {} is already being loaded by another instance, skipping", cohortId)
+                return@load
+            }
             try {
-                val storageCohort = cohortStorage.getCohortDescription(cohortId)
-                val cohort =
-                    Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
-                        try {
-                            cohortApi.getCohort(cohortId, storageCohort?.lastModified, maxCohortSize)
-                        } catch (_: CohortNotModifiedException) {
-                            log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
-                            null
+                try {
+                    val storageCohort = cohortStorage.getCohortDescription(cohortId)
+                    try {
+                        Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
+                            cohortApi.streamCohort(cohortId, storageCohort?.lastModified, maxCohortSize, cohortStorage)
                         }
+                        val updated = cohortStorage.getCohortDescription(cohortId)
+                        if (updated != null) {
+                            log.info("Cohort download/save completed. {}", updated)
+                        }
+                    } catch (_: CohortNotModifiedException) {
+                        log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
                     }
-                if (cohort != null) {
-                    log.info("Cohort download complete. {}", cohort)
-                    cohortStorage.putCohort(cohort)
+                } catch (t: Throwable) {
+                    // Don't throw if we fail to download the cohort. We
+                    // prefer to continue to update flags.
+                    log.error("Cohort download/save failed. $cohortId", t)
                 }
-            } catch (t: Throwable) {
-                // Don't throw if we fail to download the cohort. We
-                // prefer to continue to update flags.
-                log.error("Cohort download failed. $cohortId", t)
+            } finally {
+                // Always release the lock, even if download failed
+                cohortStorage.releaseCohortLoadingLock(cohortId)
             }
         }
         log.trace("loadCohort: end - cohortId={}", cohortId)

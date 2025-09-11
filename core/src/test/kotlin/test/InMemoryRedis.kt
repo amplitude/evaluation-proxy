@@ -1,7 +1,7 @@
 package test
 
-import com.amplitude.util.Redis
-import com.amplitude.util.RedisKey
+import com.amplitude.util.redis.Redis
+import com.amplitude.util.redis.RedisKey
 import kotlin.time.Duration
 
 internal class InMemoryRedis : Redis {
@@ -18,6 +18,19 @@ internal class InMemoryRedis : Redis {
         value: String,
     ) {
         kv[key.value] = value
+    }
+
+    override suspend fun set(
+        key: RedisKey,
+        value: String,
+        mode: String,
+        seconds: Long,
+        condition: String,
+    ): String? {
+        // Simple implementation for testing - ignores mode/seconds/condition
+        val existing = kv[key.value]
+        kv[key.value] = value
+        return if (existing == null) "OK" else null
     }
 
     override suspend fun del(key: RedisKey) {
@@ -61,6 +74,27 @@ internal class InMemoryRedis : Redis {
         key2: RedisKey,
     ): Set<String>? {
         return sets[key1.value]?.subtract(sets[key2.value] ?: setOf())
+    }
+
+    override suspend fun sdiffstore(
+        destKey: RedisKey,
+        key1: RedisKey,
+        key2: RedisKey,
+    ): Long {
+        val diff = sets[key1.value]?.subtract(sets[key2.value] ?: setOf()) ?: setOf()
+        sets[destKey.value] = diff.toMutableSet()
+        return diff.size.toLong()
+    }
+
+    override suspend fun sscanChunked(
+        key: RedisKey,
+        chunkSize: Int,
+        processor: suspend (chunk: Set<String>) -> Unit,
+    ) {
+        val set = sets[key.value] ?: return
+        set.chunked(chunkSize).forEach { chunk ->
+            processor(chunk.toSet())
+        }
     }
 
     override suspend fun hget(
@@ -113,6 +147,41 @@ internal class InMemoryRedis : Redis {
     ) {
         for (command in commands) {
             srem(command.first, command.second)
+        }
+    }
+
+    private val activeLocks = mutableMapOf<String, String>()
+
+    override suspend fun acquireLock(
+        key: RedisKey,
+        ttlSeconds: Long,
+    ): Boolean {
+        val keyStr = key.value
+        return if (kv.containsKey(keyStr)) {
+            false // Lock already exists
+        } else {
+            val lockValue = "${System.currentTimeMillis()}-${Thread.currentThread().id}"
+            kv[keyStr] = lockValue
+            activeLocks[keyStr] = lockValue
+            // Note: InMemory doesn't implement TTL expiration for simplicity
+            true
+        }
+    }
+
+    override suspend fun releaseLock(key: RedisKey): Boolean {
+        val keyStr = key.value
+        val expectedValue = activeLocks.remove(keyStr)
+
+        return if (expectedValue != null) {
+            val currentValue = kv[keyStr]
+            if (currentValue == expectedValue) {
+                kv.remove(keyStr)
+                true
+            } else {
+                false
+            }
+        } else {
+            false // No active lock to release
         }
     }
 }

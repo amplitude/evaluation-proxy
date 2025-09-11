@@ -1,9 +1,9 @@
 package com.amplitude.project
 
 import com.amplitude.RedisConfiguration
-import com.amplitude.util.Redis
-import com.amplitude.util.RedisConnection
-import com.amplitude.util.RedisKey
+import com.amplitude.util.redis.Redis
+import com.amplitude.util.redis.RedisKey
+import com.amplitude.util.redis.createRedisConnections
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -16,19 +16,15 @@ internal interface ProjectStorage {
 }
 
 internal fun getProjectStorage(redisConfiguration: RedisConfiguration?): ProjectStorage {
-    val uri = redisConfiguration?.uri
-    return if (uri == null) {
-        InMemoryProjectStorage()
-    } else {
+    val connections = createRedisConnections(redisConfiguration)
+    return if (connections != null) {
         RedisProjectStorage(
-            redisConfiguration.prefix,
-            RedisConnection(
-                uri,
-                redisConfiguration.connectionTimeoutMillis,
-                redisConfiguration.commandTimeoutMillis,
-            ),
+            redisConfiguration!!.prefix,
+            connections.primary,
             redisConfiguration.scanLimit,
         )
+    } else {
+        InMemoryProjectStorage()
     }
 }
 
