@@ -272,32 +272,32 @@ class CohortApiTest {
             assertEquals(members.size, stored?.size)
         }
 
-        @Test
-        fun `streaming cohort 204 no content is a no-op and does not throw`(): Unit =
-            runBlocking {
-                val cohortId = "stream-no-content"
-                val mockEngine =
-                    MockEngine { _ ->
-                        respond(
-                            content = ByteReadChannel(""),
-                            status = HttpStatusCode.NoContent,
-                        )
-                    }
-                val api = CohortApiV1(serverUrl, apiKey, secretKey, mockEngine)
-                val storage = com.amplitude.cohort.InMemoryCohortStorage()
+    @Test
+    fun `streaming cohort 204 no content is a no-op and does not throw`(): Unit =
+        runBlocking {
+            val cohortId = "stream-no-content"
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = ByteReadChannel(""),
+                        status = HttpStatusCode.NoContent,
+                    )
+                }
+            val api = CohortApiV1(serverUrl, apiKey, secretKey, mockEngine)
+            val storage = com.amplitude.cohort.InMemoryCohortStorage()
 
-                // Seed existing cohort to ensure it remains unchanged
-                val existingDesc = com.amplitude.cohort.CohortDescription(cohortId, "User", 1, 100)
-                val writer = storage.createWriter(existingDesc)
-                writer.addMembers(listOf("1"))
-                writer.complete(1)
+            // Seed existing cohort to ensure it remains unchanged
+            val existingDesc = com.amplitude.cohort.CohortDescription(cohortId, "User", 1, 100)
+            val writer = storage.createWriter(existingDesc)
+            writer.addMembers(listOf("1"))
+            writer.complete(1)
 
-                // Should not throw and should not change existing data
-                api.streamCohort(cohortId, 100, Int.MAX_VALUE, storage)
+            // Should not throw and should not change existing data
+            api.streamCohort(cohortId, 100, Int.MAX_VALUE, storage)
 
-                val stored = storage.getCohort(cohortId)
-                assertEquals(1, stored?.size)
-                assertEquals(100, stored?.lastModified)
-                assertEquals(setOf("1"), stored?.members)
-            }
+            val stored = storage.getCohort(cohortId)
+            assertEquals(1, stored?.size)
+            assertEquals(100, stored?.lastModified)
+            assertEquals(setOf("1"), stored?.members)
+        }
 }
