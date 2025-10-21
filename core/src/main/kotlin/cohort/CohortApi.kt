@@ -158,7 +158,7 @@ internal class CohortApiV1(
             }
         log.debug("streamCohort({}): status={}", cohortId, response.status)
         when (response.status) {
-            HttpStatusCode.NoContent -> throw CohortNotModifiedException(cohortId)
+            HttpStatusCode.NoContent -> return
             HttpStatusCode.PayloadTooLarge -> throw CohortTooLargeException(cohortId, maxCohortSize)
             else -> {
                 val input = response.bodyAsChannel().toInputStream()
@@ -205,7 +205,7 @@ internal class CohortApiV1(
                                     val lm = parsedLastModified
                                     if (id != null && lm != null) {
                                         if (lm <= existingLastModified) {
-                                            throw CohortNotModifiedException(id)
+                                            return
                                         }
                                     }
                                     ensureWriter()
