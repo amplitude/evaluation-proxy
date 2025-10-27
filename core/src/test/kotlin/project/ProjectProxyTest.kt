@@ -11,18 +11,17 @@ import com.amplitude.util.json
 import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.mockk
-import java.io.ByteArrayInputStream
-import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import test.cohort
 import test.deployment
 import test.flag
 import test.project
+import java.io.ByteArrayInputStream
+import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-
 
 class ProjectProxyTest {
     private val project = project()

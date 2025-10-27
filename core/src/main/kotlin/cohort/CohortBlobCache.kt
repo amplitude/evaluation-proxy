@@ -2,7 +2,6 @@ package com.amplitude.cohort
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Simple in-memory cache for gzipped cohort blobs.
