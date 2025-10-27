@@ -5,7 +5,7 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Simple in-memory LRU cache for gzipped cohort blobs.
+ * Simple in-memory cache for gzipped cohort blobs.
  * Key: "{cohortId}"
  */
 internal object CohortBlobCache {
