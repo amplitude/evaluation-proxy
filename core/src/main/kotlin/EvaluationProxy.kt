@@ -38,20 +38,28 @@ class EvaluationProxyResponseException(
 data class EvaluationProxyResponse(
     val status: HttpStatusCode,
     val body: String,
+    val bytes: ByteArray? = null,
 ) {
     companion object {
         fun error(
             status: HttpStatusCode,
             message: String,
         ): EvaluationProxyResponse {
-            return EvaluationProxyResponse(status, message)
+            return EvaluationProxyResponse(status, body = message, bytes = null)
         }
 
         inline fun <reified T> json(
             status: HttpStatusCode,
             response: T,
         ): EvaluationProxyResponse {
-            return EvaluationProxyResponse(status, json.encodeToString<T>(response))
+            return EvaluationProxyResponse(status, body = json.encodeToString<T>(response), bytes = null)
+        }
+
+        fun bytes(
+            status: HttpStatusCode,
+            payload: ByteArray,
+        ): EvaluationProxyResponse {
+            return EvaluationProxyResponse(status = status, body = "", bytes = payload)
         }
     }
 }

@@ -6,12 +6,18 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.cohort.toCohortDescription
+import com.amplitude.cohort.GetCohortResponse
 import com.amplitude.util.redis.RedisKey
+import com.amplitude.util.json
+import java.io.ByteArrayInputStream
+import java.util.Base64
+import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
 import test.cohort
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Duration
 
@@ -139,6 +145,16 @@ class CohortStorageTest {
                 acc.addMembers(cohort.members.toList())
                 acc.complete(cohort.members.size)
             }
+            // blob is stored and decodes correctly
+            run {
+                val blobKey = RedisKey.CohortBlob("amplitude ", "12345", cohort.id, cohort.lastModified)
+                val b64 = redis.get(blobKey)
+                assertNotNull(b64)
+                val gz = Base64.getDecoder().decode(b64)
+                val jsonStr = GZIPInputStream(ByteArrayInputStream(gz)).use { String(it.readBytes(), Charsets.UTF_8) }
+                val parsed = json.decodeFromString<GetCohortResponse>(jsonStr)
+                assertEquals(GetCohortResponse.fromCohort(cohort), parsed)
+            }
             // check cohort membership
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
                 assertEquals(setOf(cohort.id), it)
@@ -149,6 +165,12 @@ class CohortStorageTest {
                 val acc = cohortStorage.createWriter(cohort2.toCohortDescription())
                 acc.addMembers(cohort2.members.toList())
                 acc.complete(cohort2.members.size)
+            }
+            // cache invalidated (next get loads new blob and caches it again)
+            run {
+                val blobKey2 = RedisKey.CohortBlob("amplitude ", "12345", cohort.id, 2)
+                val b64 = redis.get(blobKey2)
+                assertNotNull(b64)
             }
             // check cohort membership exists
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {

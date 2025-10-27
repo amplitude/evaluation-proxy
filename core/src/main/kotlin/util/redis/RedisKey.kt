@@ -29,6 +29,16 @@ internal sealed class RedisKey(val value: String) {
         val cohortLastModified: Long,
     ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:$cohortGroupType:$cohortLastModified")
 
+    /**
+     * Gzipped JSON blob for a cohort (base64-encoded gzipped bytes of a JSON object).
+     */
+    data class CohortBlob(
+        val prefix: String,
+        val projectId: String,
+        val cohortId: String,
+        val cohortLastModified: Long,
+    ) : RedisKey("$prefix:$STORAGE_PROTOCOL_VERSION:{projects:$projectId:cohort:$cohortId}:blob:$cohortLastModified")
+
     data class UserCohortMemberships(
         val prefix: String,
         val projectId: String,

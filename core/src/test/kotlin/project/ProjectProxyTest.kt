@@ -11,6 +11,8 @@ import com.amplitude.util.json
 import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.mockk
+import java.io.ByteArrayInputStream
+import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import test.cohort
@@ -19,6 +21,8 @@ import test.flag
 import test.project
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+
 
 class ProjectProxyTest {
     private val project = project()
@@ -106,7 +110,11 @@ class ProjectProxyTest {
                 )
             val result = projectProxy.getCohort("a", null, null)
             assertEquals(HttpStatusCode.OK, result.status)
-            assertEquals(json.encodeToString(GetCohortResponse.fromCohort(cohort)), result.body)
+            val bytes = result.bytes
+            assertNotNull(bytes)
+            val jsonStr = ungzipToString(bytes)
+            val decoded = json.decodeFromString<GetCohortResponse>(jsonStr)
+            assertEquals(GetCohortResponse.fromCohort(cohort), decoded)
         }
 
     @Test
@@ -131,7 +139,11 @@ class ProjectProxyTest {
                 )
             val result = projectProxy.getCohort("a", 1, null)
             assertEquals(HttpStatusCode.OK, result.status)
-            assertEquals(json.encodeToString(GetCohortResponse.fromCohort(cohort)), result.body)
+            val bytes = result.bytes
+            assertNotNull(bytes)
+            val jsonStr = ungzipToString(bytes)
+            val decoded = json.decodeFromString<GetCohortResponse>(jsonStr)
+            assertEquals(GetCohortResponse.fromCohort(cohort), decoded)
         }
 
     @Test
@@ -185,7 +197,11 @@ class ProjectProxyTest {
                 )
             val result = projectProxy.getCohort("a", null, Int.MAX_VALUE)
             assertEquals(HttpStatusCode.OK, result.status)
-            assertEquals(json.encodeToString(GetCohortResponse.fromCohort(cohort)), result.body)
+            val bytes = result.bytes
+            assertNotNull(bytes)
+            val jsonStr = ungzipToString(bytes)
+            val decoded = json.decodeFromString<GetCohortResponse>(jsonStr)
+            assertEquals(GetCohortResponse.fromCohort(cohort), decoded)
         }
 
     @Test
@@ -369,4 +385,11 @@ class ProjectProxyTest {
             assertEquals(HttpStatusCode.OK, result.status)
             assertEquals("""{"flag":{"key":"on","value":"on"}}""", result.body)
         }
+}
+
+// Helper function to ungzip a byte array to a string
+private fun ungzipToString(bytes: ByteArray): String {
+    GZIPInputStream(ByteArrayInputStream(bytes)).use { gis ->
+        return String(gis.readBytes(), Charsets.UTF_8)
+    }
 }

@@ -6,11 +6,19 @@ import com.amplitude.util.logger
 import com.amplitude.util.redis.Redis
 import com.amplitude.util.redis.RedisKey
 import com.amplitude.util.redis.createRedisConnections
+import com.squareup.moshi.JsonWriter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import okio.buffer
+import okio.sink
+import java.io.ByteArrayOutputStream
+import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPOutputStream
 import kotlin.time.Duration
 
 // Constants
@@ -65,6 +73,11 @@ internal interface CohortStorage {
      * and finish with [CohortIngestionWriter.commit].
      */
     fun createWriter(description: CohortDescription): CohortIngestionWriter
+
+    /**
+     * Get a pre-gzipped JSON blob for the given cohortId at its latest lastModified.
+     */
+    suspend fun getCohortBlob(cohortId: String): ByteArray?
 
     /**
      * Attempt to acquire a distributed lock for cohort loading.
@@ -168,6 +181,30 @@ internal class InMemoryCohortStorage : CohortStorage {
         }
     }
 
+    override suspend fun getCohortBlob(cohortId: String): ByteArray? {
+        val cohort = getCohort(cohortId) ?: return null
+        val baos = ByteArrayOutputStream()
+        GZIPOutputStream(baos, false).use { gz ->
+            val sink = gz.sink().buffer()
+            val jw = JsonWriter.of(sink)
+
+            jw.beginObject()
+            jw.name("cohortId").value(cohort.id)
+            jw.name("groupType").value(cohort.groupType)
+            jw.name("lastModified").value(cohort.lastModified)
+            jw.name("size").value(cohort.size.toLong())
+
+            jw.name("memberIds").beginArray()
+            for (id in cohort.members) jw.value(id)
+            jw.endArray()
+
+            jw.endObject()
+            jw.flush()
+            sink.flush()
+        }
+        return baos.toByteArray()
+    }
+
     override suspend fun tryLockCohortLoading(
         cohortId: String,
         lockTimeoutSeconds: Int,
@@ -193,6 +230,9 @@ internal class RedisCohortStorage(
     companion object {
         val log by logger()
     }
+
+    // Track inflight blob loads to avoid duplicate reads
+    private val inflightBlobLoads = ConcurrentHashMap<String, CompletableDeferred<ByteArray?>>()
 
     /**
      * Stream a Redis Set via SSCAN and pipeline membership updates in sub-batches.
@@ -265,6 +305,7 @@ internal class RedisCohortStorage(
     }
 
     override suspend fun deleteCohort(description: CohortDescription) {
+        CohortBlobCache.remove(description.id)
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val cohortMembersKey =
             RedisKey.CohortMembers(
@@ -376,10 +417,65 @@ internal class RedisCohortStorage(
                     }
                 }
 
-                val jsonEncodedDescription = json.encodeToString(description.copy(size = finalSize))
-                redis.hset(RedisKey.CohortDescriptions(prefix, projectId), mapOf(description.id to jsonEncodedDescription))
+                // Build and store a pre-gzipped JSON blob for this cohort version in Redis for fast fanout.
+                val cohortId = description.id
+                val cohortLastModified = description.lastModified
+                val blobKey = RedisKey.CohortBlob(prefix, projectId, cohortId, cohortLastModified)
+                val gzBytes = buildCohortBlobGzip(description, finalSize)
+                val b64 = Base64.getEncoder().encodeToString(gzBytes)
+                redis.set(blobKey, b64)
+
+                // Remove the old blob from the cache - it will be fetched again in the next /cohort/{cohortId} request
+                CohortBlobCache.remove(cohortId)
+
+                // Publish the cohort description only after successful blob store
+                val updatedDescription = description.copy(size = finalSize)
+                val jsonEncodedDescription = json.encodeToString(updatedDescription)
+                redis.hset(
+                    RedisKey.CohortDescriptions(prefix, projectId),
+                    mapOf(description.id to jsonEncodedDescription),
+                )
             }
         }
+    }
+
+    /**
+     * Build a gzipped JSON blob for this cohort version.
+     */
+    private suspend fun buildCohortBlobGzip(
+        description: CohortDescription,
+        finalSize: Int,
+    ): ByteArray {
+        val baos = ByteArrayOutputStream()
+        GZIPOutputStream(baos, false).use { gz ->
+            val sink = gz.sink().buffer()
+            val jw = JsonWriter.of(sink)
+
+            jw.beginObject()
+            jw.name("cohortId").value(description.id)
+            jw.name("groupType").value(description.groupType)
+            jw.name("lastModified").value(description.lastModified)
+            jw.name("size").value(finalSize.toLong())
+
+            jw.name("memberIds").beginArray()
+            val newKey =
+                RedisKey.CohortMembers(
+                    prefix,
+                    projectId,
+                    description.id,
+                    description.groupType,
+                    description.lastModified,
+                )
+            readOnlyRedis.sscanChunked(newKey, REDIS_SCAN_CHUNK_SIZE) { chunk ->
+                for (id in chunk) jw.value(id)
+            }
+            jw.endArray()
+
+            jw.endObject()
+            jw.flush()
+            sink.flush()
+        }
+        return baos.toByteArray()
     }
 
     override suspend fun tryLockCohortLoading(
@@ -399,11 +495,44 @@ internal class RedisCohortStorage(
         }
     }
 
+    override suspend fun getCohortBlob(cohortId: String): ByteArray? {
+        val description = getCohortDescription(cohortId) ?: return null
+        val cohortKey = description.id
+        CohortBlobCache.get(cohortKey)?.let {
+            return it
+        }
+        // Attempt to read from Redis blob key only (read-through) with single-flight
+        val newDeferred = CompletableDeferred<ByteArray?>()
+        val existing = inflightBlobLoads.putIfAbsent(cohortKey, newDeferred)
+        if (existing != null) {
+            return existing.await()
+        } else {
+            try {
+                val blobKey = RedisKey.CohortBlob(prefix, projectId, description.id, description.lastModified)
+                val b64 = readOnlyRedis.get(blobKey)
+                val gz = b64?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+                if (gz != null) {
+                    CohortBlobCache.put(cohortKey, gz)
+                }
+                newDeferred.complete(gz)
+                return gz
+            } catch (t: Throwable) {
+                newDeferred.completeExceptionally(t)
+                throw t
+            } finally {
+                inflightBlobLoads.remove(cohortKey, newDeferred)
+            }
+        }
+    }
+
     private suspend fun getCohortMembers(
         cohortId: String,
         cohortGroupType: String,
         cohortLastModified: Long,
     ): Set<String>? {
-        return redis.sscan(RedisKey.CohortMembers(prefix, projectId, cohortId, cohortGroupType, cohortLastModified), scanLimit)
+        return readOnlyRedis.sscan(
+            RedisKey.CohortMembers(prefix, projectId, cohortId, cohortGroupType, cohortLastModified),
+            scanLimit,
+        )
     }
 }
