@@ -116,6 +116,7 @@ internal fun getCohortStorage(
             connections.readOnly,
             redisConfiguration.scanLimit,
             redisConfiguration.pipelineBatchSize,
+            CohortBlobCache(),
         )
     } else {
         InMemoryCohortStorage()
@@ -226,6 +227,7 @@ internal class RedisCohortStorage(
     private val readOnlyRedis: Redis,
     private val scanLimit: Long,
     private val pipelineBatchSize: Int,
+    private val cohortBlobCache: CohortBlobCache,
 ) : CohortStorage {
     companion object {
         val log by logger()
@@ -305,7 +307,7 @@ internal class RedisCohortStorage(
     }
 
     override suspend fun deleteCohort(description: CohortDescription) {
-        CohortBlobCache.remove(description.id)
+        cohortBlobCache.remove(description.id)
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val cohortMembersKey =
             RedisKey.CohortMembers(
@@ -426,7 +428,7 @@ internal class RedisCohortStorage(
                 redis.set(blobKey, b64)
 
                 // Remove the old blob from the cache - it will be fetched again in the next /cohort/{cohortId} request
-                CohortBlobCache.remove(cohortId)
+                cohortBlobCache.remove(cohortId)
 
                 // Publish the cohort description only after successful blob store
                 val updatedDescription = description.copy(size = finalSize)
@@ -498,7 +500,7 @@ internal class RedisCohortStorage(
     override suspend fun getCohortBlob(cohortId: String): ByteArray? {
         val description = getCohortDescription(cohortId) ?: return null
         val cohortKey = description.id
-        CohortBlobCache.get(cohortKey)?.let {
+        cohortBlobCache.get(cohortKey)?.let {
             return it
         }
         // Attempt to read from Redis blob key only (read-through) with single-flight
@@ -512,7 +514,7 @@ internal class RedisCohortStorage(
                 val b64 = readOnlyRedis.get(blobKey)
                 val gz = b64?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
                 if (gz != null) {
-                    CohortBlobCache.put(cohortKey, gz)
+                    cohortBlobCache.put(cohortKey, gz)
                 }
                 newDeferred.complete(gz)
                 return gz

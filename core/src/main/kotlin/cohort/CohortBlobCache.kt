@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.withLock
  * Simple in-memory cache for gzipped cohort blobs.
  * Key: "{cohortId}"
  */
-internal object CohortBlobCache {
+internal class CohortBlobCache {
     private data class CacheEntry(val bytes: ByteArray)
 
     private val lock = Mutex()
