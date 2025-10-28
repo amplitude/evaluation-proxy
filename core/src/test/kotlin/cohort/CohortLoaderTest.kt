@@ -29,6 +29,7 @@ class CohortLoaderTest {
                 val acc = storageArg.createWriter(desc)
                 acc.addMembers(members.toList())
                 acc.complete(members.size)
+                true
             }
 
             loader.loadCohorts(setOf(cohortId))

@@ -1,6 +1,7 @@
 package cohort
 
 import com.amplitude.cohort.Cohort
+import com.amplitude.cohort.CohortBlobCache
 import com.amplitude.cohort.CohortDescription
 import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.GetCohortResponse
@@ -33,7 +34,7 @@ class CohortStorageTest {
     @Test
     fun `test redis`(): Unit =
         runBlocking {
-            test(RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000))
+            test(RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache()))
         }
 
     private fun test(cohortStorage: CohortStorage): Unit =
@@ -137,7 +138,7 @@ class CohortStorageTest {
     @Test
     fun `test redis, put cohort, users memberships exist in redis`(): Unit =
         runBlocking {
-            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000)
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
             // put cohort via writer
             val cohort = cohort("a", lastModified = 1, members = setOf("1", "2", "3"))
             run {
@@ -197,7 +198,7 @@ class CohortStorageTest {
     @Test
     fun `test redis, put large cohort, no OutOfMemoryError`(): Unit =
         runBlocking {
-            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000)
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
             // Create a large cohort with 10,000 members to simulate memory pressure
             val largeMembers = (1..10000).map { "user_$it" }.toSet()
             val largeCohort = cohort("large", lastModified = 1, members = largeMembers)

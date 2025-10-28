@@ -72,7 +72,7 @@ internal interface CohortApi {
         lastModified: Long?,
         maxCohortSize: Int,
         storage: CohortStorage,
-    )
+    ): Boolean
 }
 
 internal class CohortApiV1(
@@ -134,7 +134,7 @@ internal class CohortApiV1(
         lastModified: Long?,
         maxCohortSize: Int,
         storage: CohortStorage,
-    ) {
+    ): Boolean {
         log.debug("streamCohort({}): start - maxCohortSize={}, lastModified={}", cohortId, maxCohortSize, lastModified)
         val response =
             retry(
@@ -158,7 +158,7 @@ internal class CohortApiV1(
             }
         log.debug("streamCohort({}): status={}", cohortId, response.status)
         when (response.status) {
-            HttpStatusCode.NoContent -> return
+            HttpStatusCode.NoContent -> return false
             HttpStatusCode.PayloadTooLarge -> throw CohortTooLargeException(cohortId, maxCohortSize)
             else -> {
                 val input = response.bodyAsChannel().toInputStream()
@@ -205,7 +205,7 @@ internal class CohortApiV1(
                                     val lm = parsedLastModified
                                     if (id != null && lm != null) {
                                         if (lm <= existingLastModified) {
-                                            return
+                                            return false
                                         }
                                     }
                                     ensureWriter()
@@ -232,6 +232,7 @@ internal class CohortApiV1(
                 }
                 ensureWriter()
                 writer!!.complete(memberCount)
+                return true
             }
         }
     }

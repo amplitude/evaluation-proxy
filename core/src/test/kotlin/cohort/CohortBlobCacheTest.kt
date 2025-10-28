@@ -10,7 +10,8 @@ class CohortBlobCacheTest {
     @Test
     fun `get returns null when missing`() =
         runBlocking {
-            assertNull(CohortBlobCache.get("c1"))
+            val cache = CohortBlobCache()
+            assertNull(cache.get("c1"))
         }
 
     @Test
@@ -18,8 +19,9 @@ class CohortBlobCacheTest {
         runBlocking {
             val key = "c1"
             val bytes = byteArrayOf(1, 2, 3)
-            CohortBlobCache.put(key, bytes)
-            val result = CohortBlobCache.get(key)
+            val cache = CohortBlobCache()
+            cache.put(key, bytes)
+            val result = cache.get(key)
             assertContentEquals(bytes, result)
         }
 
@@ -28,8 +30,9 @@ class CohortBlobCacheTest {
         runBlocking {
             val key = "c1"
             val bytes = byteArrayOf(1, 2, 3)
-            CohortBlobCache.put(key, bytes)
-            CohortBlobCache.remove(key)
-            assertNull(CohortBlobCache.get(key))
+            val cache = CohortBlobCache()
+            cache.put(key, bytes)
+            cache.remove(key)
+            assertNull(cache.get(key))
         }
 }
