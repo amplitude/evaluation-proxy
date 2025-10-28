@@ -1,5 +1,4 @@
 package com.amplitude
-
 import com.amplitude.plugins.PrometheusMetrics
 import com.amplitude.plugins.configureLogging
 import com.amplitude.plugins.configureMetrics
@@ -8,6 +7,7 @@ import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import com.amplitude.util.toAnyMap
 import io.ktor.http.Headers
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -21,6 +21,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -148,7 +149,16 @@ fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
             val maxCohortSize = this.call.request.queryParameters["maxCohortSize"]?.toIntOrNull()
             val lastModified = this.call.request.queryParameters["lastModified"]?.toLongOrNull()
             val result = evaluationProxy.getCohort(apiKey, secretKey, cohortId, lastModified, maxCohortSize)
-            call.respond(result.status, result.body)
+            when (result.status) {
+                HttpStatusCode.OK -> {
+                    result.bytes?.let { gz ->
+                        call.response.headers.append("Content-Type", "application/json")
+                        call.response.headers.append("Content-Encoding", "gzip")
+                        call.respondBytes(gz)
+                    }
+                }
+                else -> call.respond(result.status, result.body)
+            }
         }
 
         get("/sdk/v2/memberships/{groupType}/{groupName}") {

@@ -7,7 +7,6 @@ import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.CohortApiV1
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.cohort.CohortStorage
-import com.amplitude.cohort.GetCohortResponse
 import com.amplitude.cohort.USER_GROUP_TYPE
 import com.amplitude.deployment.DeploymentApiV2
 import com.amplitude.deployment.DeploymentLoader
@@ -90,10 +89,13 @@ internal class ProjectProxy(
         if (cohortDescription.lastModified == lastModified) {
             return EvaluationProxyResponse.error(HttpStatusCode.NoContent, "Cohort not modified")
         }
-        val cohort =
-            cohortStorage.getCohort(cohortId)
-                ?: return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort members not found")
-        return EvaluationProxyResponse.json(HttpStatusCode.OK, GetCohortResponse.fromCohort(cohort))
+        cohortStorage.getCohortBlob(cohortId)?.let { gz ->
+            return EvaluationProxyResponse.bytes(
+                status = HttpStatusCode.OK,
+                payload = gz,
+            )
+        }
+        return EvaluationProxyResponse.error(HttpStatusCode.NotFound, "Cohort members not found")
     }
 
     suspend fun getCohortMemberships(

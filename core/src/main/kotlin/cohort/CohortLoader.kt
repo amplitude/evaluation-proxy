@@ -36,15 +36,16 @@ internal class CohortLoader(
             try {
                 try {
                     val storageCohort = cohortStorage.getCohortDescription(cohortId)
-                    try {
+                    val modified =
                         Metrics.with({ CohortDownload }, { e -> CohortDownloadFailure(e) }) {
                             cohortApi.streamCohort(cohortId, storageCohort?.lastModified, maxCohortSize, cohortStorage)
                         }
+                    if (modified) {
                         val updated = cohortStorage.getCohortDescription(cohortId)
                         if (updated != null) {
                             log.info("Cohort download/save completed. {}", updated)
                         }
-                    } catch (_: CohortNotModifiedException) {
+                    } else {
                         log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
                     }
                 } catch (t: Throwable) {
