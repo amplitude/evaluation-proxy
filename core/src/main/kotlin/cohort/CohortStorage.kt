@@ -307,6 +307,8 @@ internal class RedisCohortStorage(
     }
 
     override suspend fun deleteCohort(description: CohortDescription) {
+        val blobKey = RedisKey.CohortBlob(prefix, projectId, description.id, description.lastModified)
+        redis.del(blobKey)
         cohortBlobCache.remove(description.id)
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val cohortMembersKey =
@@ -380,6 +382,7 @@ internal class RedisCohortStorage(
                                 description.id,
                                 "removed_${System.currentTimeMillis()}",
                             )
+                        val existingBlobKey = RedisKey.CohortBlob(prefix, projectId, description.id, prev.lastModified)
 
                         try {
                             // Server-side set operations - no memory transfer to client!
@@ -406,10 +409,11 @@ internal class RedisCohortStorage(
                                 }
                             }
                         } finally {
-                            // Clean up temporary keys
+                            // Clean up temporary and existing keys
                             redis.del(addedKey)
                             redis.del(removedKey)
                             redis.expire(existingCohortKey, ttl)
+                            redis.expire(existingBlobKey, ttl)
                         }
                     } else {
                         // No previous cohort: all members are additions

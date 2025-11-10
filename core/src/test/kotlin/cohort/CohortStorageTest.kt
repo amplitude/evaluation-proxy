@@ -20,6 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 
 class CohortStorageTest {
@@ -172,6 +173,14 @@ class CohortStorageTest {
                 val blobKey2 = RedisKey.CohortBlob("amplitude ", "12345", cohort.id, 2)
                 val b64 = redis.get(blobKey2)
                 assertNotNull(b64)
+            }
+            // old blob and members keys should be marked for expiration on update
+            run {
+                val oldBlobKey = RedisKey.CohortBlob("amplitude ", "12345", cohort.id, 1)
+                assertTrue(redis.expirations.containsKey(oldBlobKey.value))
+                // existing cohort members key (lastModified=1) should also be set to expire
+                val oldMembersKey = RedisKey.CohortMembers("amplitude ", "12345", cohort.id, "User", 1)
+                assertTrue(redis.expirations.containsKey(oldMembersKey.value))
             }
             // check cohort membership exists
             redis.sscan(RedisKey.UserCohortMemberships("amplitude ", "12345", "User", "1"), 1000)?.let {
