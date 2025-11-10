@@ -8,6 +8,7 @@ internal class InMemoryRedis : Redis {
     private val kv = mutableMapOf<String, String>()
     private val sets = mutableMapOf<String, MutableSet<String>>()
     private val hashes = mutableMapOf<String, MutableMap<String, String>>()
+    internal val expirations = mutableMapOf<String, Duration>()
 
     override suspend fun get(key: RedisKey): String? {
         return kv[key.value]
@@ -129,7 +130,7 @@ internal class InMemoryRedis : Redis {
         key: RedisKey,
         ttl: Duration,
     ) {
-        // Do nothing.
+        expirations[key.value] = ttl
     }
 
     override suspend fun saddPipeline(
