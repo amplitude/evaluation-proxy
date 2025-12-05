@@ -5,29 +5,39 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Simple in-memory cache for gzipped cohort blobs.
- * Key: "{cohortId}"
+ * Key: "{cohortId}:{lastModified}"
+ * Automatically evicts old versions when a new version is cached for the same cohortId.
  */
 internal class CohortBlobCache {
     private data class CacheEntry(val bytes: ByteArray)
 
     private val lock = Mutex()
     private val map = HashMap<String, CacheEntry>()
+    private val cachedVersions = HashMap<String, Long>()
 
-    suspend fun get(key: String): ByteArray? =
+    private fun key(cohortId: String, lastModified: Long): String =
+        "$cohortId:$lastModified"
+
+    suspend fun get(cohortId: String, lastModified: Long): ByteArray? =
         lock.withLock {
-            map[key]?.bytes
+            map[key(cohortId, lastModified)]?.bytes
         }
 
-    suspend fun put(
-        key: String,
-        bytes: ByteArray,
-    ) = lock.withLock {
-        map[key] = CacheEntry(bytes)
-    }
-
-    suspend fun remove(key: String) =
+    suspend fun put(cohortId: String, lastModified: Long, bytes: ByteArray) =
         lock.withLock {
-            map.remove(key)
-            null
+            // Evict old version if exists
+            cachedVersions[cohortId]?.let { oldLastModified ->
+                map.remove(key(cohortId, oldLastModified))
+            }
+            cachedVersions[cohortId] = lastModified
+            map[key(cohortId, lastModified)] = CacheEntry(bytes)
+        }
+
+    suspend fun remove(cohortId: String, lastModified: Long) =
+        lock.withLock {
+            map.remove(key(cohortId, lastModified))
+            if (cachedVersions[cohortId] == lastModified) {
+                cachedVersions.remove(cohortId)
+            }
         }
 }

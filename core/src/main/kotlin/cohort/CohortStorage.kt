@@ -309,7 +309,7 @@ internal class RedisCohortStorage(
     override suspend fun deleteCohort(description: CohortDescription) {
         val blobKey = RedisKey.CohortBlob(prefix, projectId, description.id, description.lastModified)
         redis.del(blobKey)
-        cohortBlobCache.remove(description.id)
+        cohortBlobCache.remove(description.id, description.lastModified)
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val cohortMembersKey =
             RedisKey.CohortMembers(
@@ -432,7 +432,9 @@ internal class RedisCohortStorage(
                 redis.set(blobKey, b64)
 
                 // Remove the old blob from the cache - it will be fetched again in the next /cohort/{cohortId} request
-                cohortBlobCache.remove(cohortId)
+                if (prev != null) {
+                    cohortBlobCache.remove(cohortId, prev.lastModified)
+                }
 
                 // Publish the cohort description only after successful blob store
                 val updatedDescription = description.copy(size = finalSize)
@@ -503,13 +505,13 @@ internal class RedisCohortStorage(
 
     override suspend fun getCohortBlob(cohortId: String): ByteArray? {
         val description = getCohortDescription(cohortId) ?: return null
-        val cohortKey = description.id
-        cohortBlobCache.get(cohortKey)?.let {
+        cohortBlobCache.get(description.id, description.lastModified)?.let {
             return it
         }
         // Attempt to read from Redis blob key only (read-through) with single-flight
+        val inflightKey = "${description.id}:${description.lastModified}"
         val newDeferred = CompletableDeferred<ByteArray?>()
-        val existing = inflightBlobLoads.putIfAbsent(cohortKey, newDeferred)
+        val existing = inflightBlobLoads.putIfAbsent(inflightKey, newDeferred)
         if (existing != null) {
             return existing.await()
         } else {
@@ -518,7 +520,7 @@ internal class RedisCohortStorage(
                 val b64 = readOnlyRedis.get(blobKey)
                 val gz = b64?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
                 if (gz != null) {
-                    cohortBlobCache.put(cohortKey, gz)
+                    cohortBlobCache.put(description.id, description.lastModified, gz)
                 }
                 newDeferred.complete(gz)
                 return gz
@@ -526,7 +528,7 @@ internal class RedisCohortStorage(
                 newDeferred.completeExceptionally(t)
                 throw t
             } finally {
-                inflightBlobLoads.remove(cohortKey, newDeferred)
+                inflightBlobLoads.remove(inflightKey, newDeferred)
             }
         }
     }
