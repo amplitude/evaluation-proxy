@@ -431,11 +431,6 @@ internal class RedisCohortStorage(
                 val b64 = Base64.getEncoder().encodeToString(gzBytes)
                 redis.set(blobKey, b64)
 
-                // Remove the old blob from the cache - it will be fetched again in the next /cohort/{cohortId} request
-                if (prev != null) {
-                    cohortBlobCache.remove(cohortId, prev.lastModified)
-                }
-
                 // Publish the cohort description only after successful blob store
                 val updatedDescription = description.copy(size = finalSize)
                 val jsonEncodedDescription = json.encodeToString(updatedDescription)
