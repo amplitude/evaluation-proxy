@@ -26,7 +26,10 @@ internal fun parseReadFrom(readFromStr: String): ReadFrom {
         "ANY" -> ReadFrom.ANY
         "REPLICA_PREFERRED" -> ReadFrom.REPLICA_PREFERRED
         else -> {
-            RedisConnectionsLogger.log.warn("Invalid readFrom value: '$readFromStr'. Supported values: ANY, REPLICA_PREFERRED. Defaulting to ANY.")
+            RedisConnectionsLogger.log.warn(
+                "Invalid readFrom value: '$readFromStr'. " +
+                    "Supported values: ANY, REPLICA_PREFERRED. Defaulting to ANY.",
+            )
             ReadFrom.ANY
         }
     }
@@ -42,7 +45,7 @@ internal fun createRedisConnections(redisConfiguration: RedisConfiguration?): Re
 
         redisConfiguration.useCluster && !redisConfiguration.uri.isNullOrBlank() -> {
             val readFromStrategy = parseReadFrom(redisConfiguration.readFrom)
-            
+
             val redis =
                 RedisClusterConnection(
                     redisConfiguration.uri,
