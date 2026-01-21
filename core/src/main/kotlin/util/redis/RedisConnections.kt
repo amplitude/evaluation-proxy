@@ -1,6 +1,8 @@
 package com.amplitude.util.redis
 
 import com.amplitude.RedisConfiguration
+import com.amplitude.util.logger
+import io.lettuce.core.ReadFrom
 
 /**
  * Container for Redis connections - primary for writes, readOnly for high-volume reads
@@ -9,6 +11,26 @@ internal data class RedisConnections(
     val primary: Redis,
     val readOnly: Redis,
 )
+
+internal object RedisConnectionsLogger {
+    val log by logger()
+}
+
+/**
+ * Parse readFrom configuration string to Lettuce ReadFrom enum.
+ * Supports: ANY, REPLICA_PREFERRED
+ * Invalid values default to ANY with a warning.
+ */
+internal fun parseReadFrom(readFromStr: String): ReadFrom {
+    return when (readFromStr.uppercase()) {
+        "ANY" -> ReadFrom.ANY
+        "REPLICA_PREFERRED" -> ReadFrom.REPLICA_PREFERRED
+        else -> {
+            RedisConnectionsLogger.log.warn("Invalid readFrom value: '$readFromStr'. Supported values: ANY, REPLICA_PREFERRED. Defaulting to ANY.")
+            ReadFrom.ANY
+        }
+    }
+}
 
 /**
  * Creates Redis connections based on configuration.
@@ -19,6 +41,8 @@ internal fun createRedisConnections(redisConfiguration: RedisConfiguration?): Re
         redisConfiguration == null -> null
 
         redisConfiguration.useCluster && !redisConfiguration.uri.isNullOrBlank() -> {
+            val readFromStrategy = parseReadFrom(redisConfiguration.readFrom)
+            
             val redis =
                 RedisClusterConnection(
                     redisConfiguration.uri,
@@ -32,7 +56,7 @@ internal fun createRedisConnections(redisConfiguration: RedisConfiguration?): Re
                     redisConfiguration.readOnlyUri ?: redisConfiguration.uri,
                     redisConfiguration.connectionTimeoutMillis,
                     redisConfiguration.commandTimeoutMillis,
-                    io.lettuce.core.ReadFrom.REPLICA_PREFERRED,
+                    readFromStrategy,
                 )
             RedisConnections(redis, readOnlyRedis)
         }

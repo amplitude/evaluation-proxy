@@ -161,6 +161,7 @@ data class RedisConfiguration(
     val uri: String? = null,
     val readOnlyUri: String? = uri,
     val useCluster: Boolean = false,
+    val readFrom: String = Default.REDIS_READ_FROM,
     val prefix: String = Default.REDIS_PREFIX,
     val scanLimit: Long = Default.REDIS_SCAN_LIMIT,
     val connectionTimeoutMillis: Long = Default.REDIS_CONNECTION_TIMEOUT_MILLIS,
@@ -174,6 +175,7 @@ data class RedisConfiguration(
 
             return if (redisUri != null) {
                 val redisReadOnlyUri = stringEnv(EnvKey.REDIS_READ_ONLY_URI, Default.REDIS_READ_ONLY_URI) ?: redisUri
+                val redisReadFrom = stringEnv(EnvKey.REDIS_READ_FROM, Default.REDIS_READ_FROM)!!
                 val redisPrefix = stringEnv(EnvKey.REDIS_PREFIX, Default.REDIS_PREFIX)!!
                 val redisScanLimit = longEnv(EnvKey.REDIS_SCAN_LIMIT, Default.REDIS_SCAN_LIMIT)!!
                 val connectionTimeoutMillis = longEnv(EnvKey.REDIS_CONNECTION_TIMEOUT_MILLIS, Default.REDIS_CONNECTION_TIMEOUT_MILLIS)!!
@@ -184,6 +186,7 @@ data class RedisConfiguration(
                     uri = redisUri,
                     readOnlyUri = redisReadOnlyUri,
                     useCluster = useCluster,
+                    readFrom = redisReadFrom,
                     prefix = redisPrefix,
                     scanLimit = redisScanLimit,
                     connectionTimeoutMillis = connectionTimeoutMillis,
@@ -242,6 +245,7 @@ object EnvKey {
     const val REDIS_URI = "AMPLITUDE_REDIS_URI"
     const val REDIS_READ_ONLY_URI = "AMPLITUDE_REDIS_READ_ONLY_URI"
     const val REDIS_USE_CLUSTER = "AMPLITUDE_REDIS_USE_CLUSTER"
+    const val REDIS_READ_FROM = "AMPLITUDE_REDIS_READ_FROM"
     const val REDIS_PREFIX = "AMPLITUDE_REDIS_PREFIX"
     const val REDIS_SCAN_LIMIT = "AMPLITUDE_REDIS_SCAN_LIMIT"
     const val REDIS_CONNECTION_TIMEOUT_MILLIS = "AMPLITUDE_REDIS_CONNECTION_TIMEOUT_MILLIS"
@@ -277,6 +281,7 @@ object Default {
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_USE_CLUSTER = false
+    const val REDIS_READ_FROM = "ANY"
     const val REDIS_PREFIX = "amplitude"
     const val REDIS_SCAN_LIMIT = 10000L
     const val REDIS_CONNECTION_TIMEOUT_MILLIS = 10000L
