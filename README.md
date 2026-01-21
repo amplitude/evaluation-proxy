@@ -25,6 +25,8 @@ projects:
 configuration:
   redis:
     uri: "YOUR REDIS URI" # e.g. "redis://localhost:6379"
+    useCluster: false # Set to true for Redis Cluster
+    readFrom: "ANY" # Read routing: "ANY" (default) or "REPLICA_PREFERRED"
 ```
 
 The developer docs contain [additional information about configuration](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy#configuration).
