@@ -3,15 +3,13 @@ package com.amplitude
 import com.amplitude.util.booleanEnv
 import com.amplitude.util.intEnv
 import com.amplitude.util.json
+import com.amplitude.util.logger
 import com.amplitude.util.longEnv
 import com.amplitude.util.stringEnv
 import com.amplitude.util.yaml
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import org.slf4j.LoggerFactory
 import java.io.File
-
-private val log = LoggerFactory.getLogger("com.amplitude.Config")
 
 @Serializable
 data class ProjectsFile(
@@ -143,6 +141,8 @@ data class AssignmentConfiguration(
     val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE,
 ) {
     companion object {
+        private val log by logger()
+
         fun fromEnv(): AssignmentConfiguration {
             // Log deprecation warning if any assignment env vars are set
             if (System.getenv(EnvKey.ASSIGNMENT_FILTER_CAPACITY) != null ||
