@@ -54,10 +54,15 @@ internal class AmplitudeExposureTracker(
         try {
             Metrics.track(ExposureEvent)
             if (exposureFilter.shouldTrack(exposure)) {
-                Metrics.with({ ExposureEventSend }, { e -> ExposureEventSendFailure(e) }) {
-                    exposure.toAmplitudeEvents().forEach { event ->
-                        amplitude.logEvent(event)
+                val events = exposure.toAmplitudeEvents()
+                if (events.isNotEmpty()) {
+                    Metrics.with({ ExposureEventSend }, { e -> ExposureEventSendFailure(e) }) {
+                        events.forEach { event ->
+                            amplitude.logEvent(event)
+                        }
                     }
+                } else {
+                    Metrics.track(ExposureEventFilter)
                 }
             } else {
                 Metrics.track(ExposureEventFilter)
