@@ -14,6 +14,8 @@ import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.experiment.evaluation.EvaluationEngineImpl
 import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.experiment.evaluation.topologicalSort
+import com.amplitude.exposure.Exposure
+import com.amplitude.exposure.ExposureTracker
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.toEvaluationContext
@@ -26,6 +28,7 @@ internal class ProjectProxy(
     private val project: Project,
     configuration: Configuration,
     private val assignmentTracker: AssignmentTracker,
+    private val exposureTracker: ExposureTracker,
     private val deploymentStorage: DeploymentStorage,
     private val cohortStorage: CohortStorage,
 ) {
@@ -120,11 +123,12 @@ internal class ProjectProxy(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
+        trackExposure: Boolean = false,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
-        val result = evaluateInternal(deploymentKey, user, flagKeys)
+        val result = evaluateInternal(deploymentKey, user, flagKeys, trackExposure)
         return EvaluationProxyResponse(HttpStatusCode.OK, json.encodeToString(result))
     }
 
@@ -132,12 +136,13 @@ internal class ProjectProxy(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
+        trackExposure: Boolean = false,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
         val result =
-            evaluateInternal(deploymentKey, user, flagKeys).filter { entry ->
+            evaluateInternal(deploymentKey, user, flagKeys, trackExposure).filter { entry ->
                 val default = entry.value.metadata?.get("default") as? Boolean ?: false
                 val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
                 (!default && deployed)
@@ -149,6 +154,7 @@ internal class ProjectProxy(
         deploymentKey: String,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
+        trackExposure: Boolean = false,
     ): Map<String, EvaluationVariant> {
         // Get flag configs for the deployment from storage and topo sort.
         val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
@@ -190,6 +196,11 @@ internal class ProjectProxy(
             coroutineScope {
                 launch {
                     assignmentTracker.track(Assignment(evaluationContext, result))
+                }
+                if (trackExposure) {
+                    launch {
+                        exposureTracker.track(Exposure(evaluationContext, result))
+                    }
                 }
             }
         }

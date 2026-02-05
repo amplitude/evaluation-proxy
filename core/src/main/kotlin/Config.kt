@@ -8,7 +8,10 @@ import com.amplitude.util.stringEnv
 import com.amplitude.util.yaml
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import org.slf4j.LoggerFactory
 import java.io.File
+
+private val log = LoggerFactory.getLogger("com.amplitude.Config")
 
 @Serializable
 data class ProjectsFile(
@@ -87,7 +90,12 @@ data class Configuration(
     val flagSyncIntervalMillis: Long = Default.FLAG_SYNC_INTERVAL_MILLIS,
     val cohortSyncIntervalMillis: Long = Default.COHORT_SYNC_INTERVAL_MILLIS,
     val maxCohortSize: Int = Default.MAX_COHORT_SIZE,
+    @Deprecated(
+        message = "Assignment service is deprecated. Use exposure with Exposure service instead.",
+        replaceWith = ReplaceWith("exposure"),
+    )
     val assignment: AssignmentConfiguration = AssignmentConfiguration(),
+    val exposure: ExposureConfiguration = ExposureConfiguration(),
     val redis: RedisConfiguration? = null,
     val metrics: MetricsConfiguration = MetricsConfiguration(),
 ) {
@@ -117,11 +125,16 @@ data class Configuration(
                     )!!,
                 maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
                 assignment = AssignmentConfiguration.fromEnv(),
+                exposure = ExposureConfiguration.fromEnv(),
                 redis = RedisConfiguration.fromEnv(),
             )
     }
 }
 
+@Deprecated(
+    message = "Assignment service is deprecated. Use ExposureConfiguration with Exposure service instead.",
+    replaceWith = ReplaceWith("ExposureConfiguration"),
+)
 @Serializable
 data class AssignmentConfiguration(
     val filterCapacity: Int = Default.ASSIGNMENT_FILTER_CAPACITY,
@@ -130,8 +143,19 @@ data class AssignmentConfiguration(
     val useBatchMode: Boolean = Default.ASSIGNMENT_USE_BATCH_MODE,
 ) {
     companion object {
-        fun fromEnv() =
-            AssignmentConfiguration(
+        fun fromEnv(): AssignmentConfiguration {
+            // Log deprecation warning if any assignment env vars are set
+            if (System.getenv(EnvKey.ASSIGNMENT_FILTER_CAPACITY) != null ||
+                System.getenv(EnvKey.ASSIGNMENT_EVENT_UPLOAD_THRESHOLD) != null ||
+                System.getenv(EnvKey.ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS) != null ||
+                System.getenv(EnvKey.ASSIGNMENT_USE_BATCH_MODE) != null
+            ) {
+                log.warn(
+                    "DEPRECATION WARNING: Assignment configuration (AMPLITUDE_ASSIGNMENT_*) is deprecated. " +
+                        "Use Exposure configuration (AMPLITUDE_EXPOSURE_*) with X-Amp-Exp-Exposure-Track header instead.",
+                )
+            }
+            return AssignmentConfiguration(
                 filterCapacity =
                     intEnv(
                         EnvKey.ASSIGNMENT_FILTER_CAPACITY,
@@ -151,6 +175,41 @@ data class AssignmentConfiguration(
                     booleanEnv(
                         EnvKey.ASSIGNMENT_USE_BATCH_MODE,
                         Default.ASSIGNMENT_USE_BATCH_MODE,
+                    ),
+            )
+        }
+    }
+}
+
+@Serializable
+data class ExposureConfiguration(
+    val filterCapacity: Int = Default.EXPOSURE_FILTER_CAPACITY,
+    val eventUploadThreshold: Int = Default.EXPOSURE_EVENT_UPLOAD_THRESHOLD,
+    val eventUploadPeriodMillis: Int = Default.EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS,
+    val useBatchMode: Boolean = Default.EXPOSURE_USE_BATCH_MODE,
+) {
+    companion object {
+        fun fromEnv() =
+            ExposureConfiguration(
+                filterCapacity =
+                    intEnv(
+                        EnvKey.EXPOSURE_FILTER_CAPACITY,
+                        Default.EXPOSURE_FILTER_CAPACITY,
+                    )!!,
+                eventUploadThreshold =
+                    intEnv(
+                        EnvKey.EXPOSURE_EVENT_UPLOAD_THRESHOLD,
+                        Default.EXPOSURE_EVENT_UPLOAD_THRESHOLD,
+                    )!!,
+                eventUploadPeriodMillis =
+                    intEnv(
+                        EnvKey.EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS,
+                        Default.EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS,
+                    )!!,
+                useBatchMode =
+                    booleanEnv(
+                        EnvKey.EXPOSURE_USE_BATCH_MODE,
+                        Default.EXPOSURE_USE_BATCH_MODE,
                     ),
             )
     }
@@ -242,6 +301,11 @@ object EnvKey {
     const val ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS = "AMPLITUDE_ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS"
     const val ASSIGNMENT_USE_BATCH_MODE = "AMPLITUDE_ASSIGNMENT_USE_BATCH_MODE"
 
+    const val EXPOSURE_FILTER_CAPACITY = "AMPLITUDE_EXPOSURE_FILTER_CAPACITY"
+    const val EXPOSURE_EVENT_UPLOAD_THRESHOLD = "AMPLITUDE_EXPOSURE_EVENT_UPLOAD_THRESHOLD"
+    const val EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS = "AMPLITUDE_EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS"
+    const val EXPOSURE_USE_BATCH_MODE = "AMPLITUDE_EXPOSURE_USE_BATCH_MODE"
+
     const val REDIS_URI = "AMPLITUDE_REDIS_URI"
     const val REDIS_READ_ONLY_URI = "AMPLITUDE_REDIS_READ_ONLY_URI"
     const val REDIS_USE_CLUSTER = "AMPLITUDE_REDIS_USE_CLUSTER"
@@ -277,6 +341,11 @@ object Default {
     const val ASSIGNMENT_EVENT_UPLOAD_THRESHOLD = 100
     const val ASSIGNMENT_EVENT_UPLOAD_PERIOD_MILLIS = 10000
     const val ASSIGNMENT_USE_BATCH_MODE = true
+
+    const val EXPOSURE_FILTER_CAPACITY = 1 shl 20
+    const val EXPOSURE_EVENT_UPLOAD_THRESHOLD = 100
+    const val EXPOSURE_EVENT_UPLOAD_PERIOD_MILLIS = 10000
+    const val EXPOSURE_USE_BATCH_MODE = true
 
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null

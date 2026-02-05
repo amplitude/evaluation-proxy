@@ -20,6 +20,14 @@ data object AssignmentEventSend : Metric()
 
 data class AssignmentEventSendFailure(val exception: Exception) : FailureMetric()
 
+data object ExposureEvent : Metric()
+
+data object ExposureEventFilter : Metric()
+
+data object ExposureEventSend : Metric()
+
+data class ExposureEventSendFailure(val exception: Exception) : FailureMetric()
+
 data object DeploymentsFetch : Metric()
 
 data class DeploymentsFetchFailure(val exception: Exception) : FailureMetric()
