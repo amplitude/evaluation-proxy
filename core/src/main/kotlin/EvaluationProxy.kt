@@ -5,6 +5,7 @@ import com.amplitude.cohort.CohortStorage
 import com.amplitude.cohort.getCohortStorage
 import com.amplitude.deployment.DeploymentStorage
 import com.amplitude.deployment.getDeploymentStorage
+import com.amplitude.exposure.AmplitudeExposureTracker
 import com.amplitude.project.Project
 import com.amplitude.project.ProjectApi
 import com.amplitude.project.ProjectApiV1
@@ -101,6 +102,13 @@ class EvaluationProxy internal constructor(
 
     suspend fun start() {
         log.info("Starting evaluation proxy.")
+        // Check for deprecated assignment configuration in YAML
+        if (configuration.assignment != AssignmentConfiguration()) {
+            log.warn(
+                "DEPRECATION WARNING: 'assignment' configuration is deprecated. " +
+                    "Use 'exposure' configuration with X-Amp-Exp-Exposure-Track header instead.",
+            )
+        }
         /*
          * Fetch deployments, setup initial mappings for each project
          * configuration, and create the project proxy.
@@ -263,6 +271,7 @@ class EvaluationProxy internal constructor(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
+        trackExposure: Boolean = false,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -278,7 +287,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluate(deploymentKey, user, flagKeys)
+                projectProxy.evaluate(deploymentKey, user, flagKeys, trackExposure)
             }
         }
 
@@ -286,6 +295,7 @@ class EvaluationProxy internal constructor(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
+        trackExposure: Boolean = false,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -301,7 +311,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluateV1(deploymentKey, user, flagKeys)
+                projectProxy.evaluateV1(deploymentKey, user, flagKeys, trackExposure)
             }
         }
 
@@ -366,6 +376,12 @@ class EvaluationProxy internal constructor(
                 configuration.analyticsServerUrl,
                 configuration.assignment,
             )
+        val exposureTracker =
+            AmplitudeExposureTracker(
+                project.apiKey,
+                configuration.analyticsServerUrl,
+                configuration.exposure,
+            )
         val deploymentStorage = getDeploymentStorage(project.id, configuration.redis)
         val cohortStorage =
             getCohortStorage(
@@ -377,6 +393,7 @@ class EvaluationProxy internal constructor(
             project,
             configuration,
             assignmentTracker,
+            exposureTracker,
             deploymentStorage,
             cohortStorage,
         )

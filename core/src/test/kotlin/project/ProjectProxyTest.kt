@@ -6,6 +6,7 @@ import com.amplitude.cohort.GetCohortResponse
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.toCohortDescription
 import com.amplitude.deployment.InMemoryDeploymentStorage
+import com.amplitude.exposure.ExposureTracker
 import com.amplitude.project.ProjectProxy
 import com.amplitude.util.json
 import io.ktor.http.HttpStatusCode
@@ -31,6 +32,7 @@ class ProjectProxyTest {
     fun `test get flag configs, null deployment, unauthorized`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -38,6 +40,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -51,6 +54,7 @@ class ProjectProxyTest {
             val deployment = deployment("deployment")
             val flag = flag("flag")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage =
                 InMemoryDeploymentStorage().apply {
                     putFlag(deployment.key, flag)
@@ -61,6 +65,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -73,6 +78,7 @@ class ProjectProxyTest {
     fun `test get cohort, null cohort id, not found`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -80,6 +86,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -92,6 +99,7 @@ class ProjectProxyTest {
         runBlocking {
             val cohort = cohort("a")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
@@ -104,6 +112,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -121,6 +130,7 @@ class ProjectProxyTest {
         runBlocking {
             val cohort = cohort("a", 100)
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
@@ -133,6 +143,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -150,6 +161,7 @@ class ProjectProxyTest {
         runBlocking {
             val cohort = cohort("a", 100)
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
@@ -162,6 +174,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -176,6 +189,7 @@ class ProjectProxyTest {
             val flag = flag("flag", setOf("a"))
             val cohort = cohort("a", 100, size = 100)
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage =
                 InMemoryDeploymentStorage().apply {
                     putFlag(deployment.key, flag)
@@ -191,6 +205,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -208,6 +223,7 @@ class ProjectProxyTest {
         runBlocking {
             val cohort = cohort("a", 100, size = 100)
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage =
                 InMemoryCohortStorage().apply {
@@ -220,6 +236,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -231,6 +248,7 @@ class ProjectProxyTest {
     fun `test get cohort memberships for group, null deployment, unauthorized`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -238,6 +256,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -250,6 +269,7 @@ class ProjectProxyTest {
         runBlocking {
             val deployment = deployment("deployment")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -257,6 +277,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -269,6 +290,7 @@ class ProjectProxyTest {
         runBlocking {
             val deployment = deployment("deployment")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -276,6 +298,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -290,6 +313,7 @@ class ProjectProxyTest {
             val cohort = cohort("a")
             val flag = flag("flag", setOf("a"))
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage =
                 InMemoryDeploymentStorage().apply {
                     putFlag(deployment.key, flag)
@@ -305,6 +329,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -317,6 +342,7 @@ class ProjectProxyTest {
     fun `test evaluate, null deployment, unauthorized`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -324,6 +350,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -337,6 +364,7 @@ class ProjectProxyTest {
         runBlocking {
             val deployment = deployment("deployment")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage = InMemoryDeploymentStorage()
             val cohortStorage = InMemoryCohortStorage()
             val projectProxy =
@@ -344,6 +372,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
@@ -360,6 +389,7 @@ class ProjectProxyTest {
             val flag = flag("flag", setOf("a"))
             val deployment = deployment("deployment")
             val assignmentTracker = mockk<AssignmentTracker>()
+            val exposureTracker = mockk<ExposureTracker>()
             val deploymentStorage =
                 InMemoryDeploymentStorage().apply {
                     putFlag(deployment.key, flag)
@@ -375,6 +405,7 @@ class ProjectProxyTest {
                     project,
                     configuration,
                     assignmentTracker,
+                    exposureTracker,
                     deploymentStorage,
                     cohortStorage,
                 )
