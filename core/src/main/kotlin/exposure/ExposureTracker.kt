@@ -54,10 +54,15 @@ internal class AmplitudeExposureTracker(
         try {
             Metrics.track(ExposureEvent)
             if (exposureFilter.shouldTrack(exposure)) {
-                Metrics.with({ ExposureEventSend }, { e -> ExposureEventSendFailure(e) }) {
-                    exposure.toAmplitudeEvents().forEach { event ->
-                        amplitude.logEvent(event)
+                val events = exposure.toAmplitudeEvents()
+                if (events.isNotEmpty()) {
+                    Metrics.with({ ExposureEventSend }, { e -> ExposureEventSendFailure(e) }) {
+                        events.forEach { event ->
+                            amplitude.logEvent(event)
+                        }
                     }
+                } else {
+                    Metrics.track(ExposureEventFilter)
                 }
             } else {
                 Metrics.track(ExposureEventFilter)
@@ -111,7 +116,6 @@ internal fun Exposure.toAmplitudeEvents(): List<Event> {
         event.userProperties =
             JSONObject().apply {
                 val set = JSONObject()
-                val unset = JSONObject()
                 val flagType = variant.metadata?.get("flagType") as? String
                 if (flagType != FlagType.MUTUAL_EXCLUSION_GROUP) {
                     if (variant.key != null) {
@@ -119,7 +123,6 @@ internal fun Exposure.toAmplitudeEvents(): List<Event> {
                     }
                 }
                 put("\$set", set)
-                put("\$unset", unset)
             }
 
         // Insert ID includes flagKey to make it unique per flag
