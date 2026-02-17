@@ -271,7 +271,7 @@ class EvaluationProxy internal constructor(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
-        trackExposure: Boolean = false,
+        tracksExposure: Boolean = false,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -287,7 +287,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluate(deploymentKey, user, flagKeys, trackExposure)
+                projectProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure)
             }
         }
 
@@ -295,7 +295,7 @@ class EvaluationProxy internal constructor(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
-        trackExposure: Boolean = false,
+        tracksExposure: Boolean = false,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -311,7 +311,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluateV1(deploymentKey, user, flagKeys, trackExposure)
+                projectProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure)
             }
         }
 

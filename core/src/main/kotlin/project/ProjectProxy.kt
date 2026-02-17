@@ -123,12 +123,12 @@ internal class ProjectProxy(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
-        trackExposure: Boolean = false,
+        tracksExposure: Boolean = false,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
-        val result = evaluateInternal(deploymentKey, user, flagKeys, trackExposure)
+        val result = evaluateInternal(deploymentKey, user, flagKeys, tracksExposure)
         return EvaluationProxyResponse(HttpStatusCode.OK, json.encodeToString(result))
     }
 
@@ -136,13 +136,13 @@ internal class ProjectProxy(
         deploymentKey: String?,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
-        trackExposure: Boolean = false,
+        tracksExposure: Boolean = false,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
         val result =
-            evaluateInternal(deploymentKey, user, flagKeys, trackExposure).filter { entry ->
+            evaluateInternal(deploymentKey, user, flagKeys, tracksExposure).filter { entry ->
                 val default = entry.value.metadata?.get("default") as? Boolean ?: false
                 val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
                 (!default && deployed)
@@ -154,7 +154,7 @@ internal class ProjectProxy(
         deploymentKey: String,
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
-        trackExposure: Boolean = false,
+        tracksExposure: Boolean = false,
     ): Map<String, EvaluationVariant> {
         // Get flag configs for the deployment from storage and topo sort.
         val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
@@ -197,7 +197,7 @@ internal class ProjectProxy(
                 launch {
                     assignmentTracker.track(Assignment(evaluationContext, result))
                 }
-                if (trackExposure) {
+                if (tracksExposure) {
                     launch {
                         exposureTracker.track(Exposure(evaluationContext, result))
                     }
