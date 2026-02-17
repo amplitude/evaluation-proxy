@@ -22,10 +22,18 @@ private object FlagType {
     const val RELEASE_GROUP = "release-group"
 }
 
+@Deprecated(
+    message = "Assignment service is deprecated. Use ExposureTracker with Exposure service instead.",
+    replaceWith = ReplaceWith("com.amplitude.exposure.ExposureTracker"),
+)
 internal interface AssignmentTracker {
     suspend fun track(assignment: Assignment)
 }
 
+@Deprecated(
+    message = "Assignment service is deprecated. Use AmplitudeExposureTracker with Exposure service instead.",
+    replaceWith = ReplaceWith("com.amplitude.exposure.AmplitudeExposureTracker"),
+)
 internal class AmplitudeAssignmentTracker(
     private val amplitude: Amplitude,
     private val assignmentFilter: AssignmentFilter,

@@ -213,7 +213,8 @@ suspend fun ApplicationCall.evaluate(
     val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
-    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys)
+    val tracksExposure = request.getTracksExposure()
+    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure)
     respond(result.status, result.body)
 }
 
@@ -225,7 +226,8 @@ suspend fun ApplicationCall.evaluateV1(
     val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
-    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys)
+    val tracksExposure = request.getTracksExposure()
+    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure)
     respond(result.status, result.body)
 }
 
@@ -264,6 +266,22 @@ internal fun Headers.getApiAndSecretKey(): Pair<String?, String?> {
         return segmentedAuthValue[0] to segmentedAuthValue[1]
     } catch (e: Exception) {
         return null to null
+    }
+}
+
+/**
+ * Get the tracksExposure option from the request header.
+ * When true, exposure events will be sent to Amplitude.
+ *
+ * Header: X-Amp-Exp-Exposure-Track with values "track" or "no-track"
+ * Defaults to false (no-track) if header is not set or has an unknown value.
+ */
+private fun ApplicationRequest.getTracksExposure(): Boolean {
+    val headerValue = this.headers["X-Amp-Exp-Exposure-Track"]
+    return when (headerValue) {
+        "track" -> true
+        "no-track" -> false
+        else -> false // Default to no-track if header not set or unknown value
     }
 }
 

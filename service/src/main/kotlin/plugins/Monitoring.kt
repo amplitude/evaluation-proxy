@@ -20,6 +20,10 @@ import com.amplitude.EvaluationProxyGetMembershipsRequest
 import com.amplitude.EvaluationProxyGetMembershipsRequestError
 import com.amplitude.EvaluationProxyRequest
 import com.amplitude.EvaluationProxyRequestError
+import com.amplitude.ExposureEvent
+import com.amplitude.ExposureEventFilter
+import com.amplitude.ExposureEventSend
+import com.amplitude.ExposureEventSendFailure
 import com.amplitude.FailureMetric
 import com.amplitude.FlagsFetch
 import com.amplitude.FlagsFetchFailure
@@ -85,6 +89,18 @@ class PrometheusMetrics(
             }
             is AssignmentEventSendFailure -> {
                 prometheus.counter("amplitude_proxy_assignment_send_failure_total").increment()
+            }
+            is ExposureEvent -> {
+                prometheus.counter("amplitude_proxy_exposure_total").increment()
+            }
+            is ExposureEventFilter -> {
+                prometheus.counter("amplitude_proxy_exposure_filter_total").increment()
+            }
+            is ExposureEventSend -> {
+                prometheus.counter("amplitude_proxy_exposure_send_total").increment()
+            }
+            is ExposureEventSendFailure -> {
+                prometheus.counter("amplitude_proxy_exposure_send_failure_total").increment()
             }
             is DeploymentsFetch -> {
                 prometheus.counter("amplitude_proxy_deployments_fetch_total").increment()
