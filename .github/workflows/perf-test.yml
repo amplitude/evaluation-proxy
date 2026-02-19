@@ -1,4 +1,4 @@
-name: Trigger SDK Tests Build
+name: Run Evaluation Proxy Performance Tests
 
 on:
   push:
