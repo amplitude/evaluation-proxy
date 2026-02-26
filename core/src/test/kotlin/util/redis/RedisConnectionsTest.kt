@@ -1,11 +1,20 @@
 package util.redis
 
+import com.amplitude.Default
+import com.amplitude.RedisConfiguration
 import com.amplitude.util.redis.parseReadFrom
 import io.lettuce.core.ReadFrom
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RedisConnectionsTest {
+    @Test
+    fun `RedisConfiguration defaults readFrom to REPLICA_PREFERRED`() {
+        val redisConfiguration = RedisConfiguration()
+        assertEquals("REPLICA_PREFERRED", Default.REDIS_READ_FROM)
+        assertEquals("REPLICA_PREFERRED", redisConfiguration.readFrom)
+    }
+
     @Test
     fun `parseReadFrom handles ANY`() {
         val result = parseReadFrom("ANY")
