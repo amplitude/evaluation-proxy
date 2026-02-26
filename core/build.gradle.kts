@@ -54,7 +54,7 @@ dependencies {
 // Publishing
 
 group = "com.amplitude"
-version = "0.11.3"
+version = "1.0.0"
 
 mavenPublishing {
     coordinates(
