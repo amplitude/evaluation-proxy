@@ -350,7 +350,7 @@ object Default {
     val REDIS_URI: String? = null
     val REDIS_READ_ONLY_URI: String? = null
     const val REDIS_USE_CLUSTER = false
-    const val REDIS_READ_FROM = "ANY"
+    const val REDIS_READ_FROM = "REPLICA_PREFERRED"
     const val REDIS_PREFIX = "amplitude"
     const val REDIS_SCAN_LIMIT = 10000L
     const val REDIS_CONNECTION_TIMEOUT_MILLIS = 10000L
