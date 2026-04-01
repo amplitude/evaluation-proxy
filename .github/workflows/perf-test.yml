@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -31,7 +31,7 @@ jobs:
 
       - name: Generate GitHub App token
         id: generate-token
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@8e1ba3bf1619726336414f1014e37f17fbadf1db # v2
         with:
           application_id: ${{ secrets.EVALUATION_PROXY_INTEGRATION_APP_ID }}
           application_private_key: ${{ secrets.EVALUATION_PROXY_INTEGRATION_KEY }}
