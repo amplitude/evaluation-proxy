@@ -56,6 +56,37 @@ class ExposureTrackerTest {
         }
 
     @Test
+    fun `test exposure includes experiment key when present in metadata`() =
+        runBlocking {
+            val context = user(userId = "user", deviceId = "device").toEvaluationContext()
+            val results =
+                mapOf(
+                    "with-exp-key" to
+                        EvaluationVariant(
+                            key = "treatment",
+                            metadata = mapOf("deployed" to true, "experimentKey" to "exp-1"),
+                        ),
+                    "without-exp-key" to
+                        EvaluationVariant(
+                            key = "on",
+                            metadata = mapOf("deployed" to true),
+                        ),
+                )
+            val exposure = Exposure(context, results)
+            val events = exposure.toAmplitudeEvents()
+
+            Assert.assertEquals(2, events.size)
+            for (event in events) {
+                val flagKey = event.eventProperties.getString("[Experiment] Flag Key")
+                if (flagKey == "with-exp-key") {
+                    Assert.assertEquals("exp-1", event.eventProperties.getString("[Experiment] Experiment Key"))
+                } else {
+                    Assert.assertFalse(event.eventProperties.has("[Experiment] Experiment Key"))
+                }
+            }
+        }
+
+    @Test
     fun `test exposure skips default variants`() =
         runBlocking {
             val context = user(userId = "user", deviceId = "device").toEvaluationContext()
