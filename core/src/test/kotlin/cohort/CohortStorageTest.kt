@@ -205,6 +205,47 @@ class CohortStorageTest {
         }
 
     @Test
+    fun `test redis, cohort update diffs client side across partitions`(): Unit =
+        runBlocking {
+            // diffPartitionMaxMembers=3 forces multiple hash partitions for a 10-member cohort so
+            // the partitioned code path is exercised, not just the single-partition fast path.
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    diffPartitionMaxMembers = 3,
+                )
+            val v1 = cohort("p", lastModified = 1, members = (1..10).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            for (member in 1..10) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$member"))
+            }
+            // v2 removes u1-u5 and adds u11-u15
+            val v2 = cohort("p", lastModified = 2, members = (6..15).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in 1..5) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            for (retained in 6..15) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$retained"))
+            }
+        }
+
+    @Test
     fun `test redis, put large cohort, no OutOfMemoryError`(): Unit =
         runBlocking {
             val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())

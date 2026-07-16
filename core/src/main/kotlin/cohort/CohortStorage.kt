@@ -24,6 +24,13 @@ import kotlin.time.Duration
 // Constants
 private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
 
+/**
+ * Maximum number of existing-set members held in proxy memory at once while diffing two cohort
+ * versions. Cohorts larger than this are diffed in ceil(size / limit) hash partitions, trading one
+ * extra SSCAN pass over both member sets per additional partition for bounded memory.
+ */
+private const val DIFF_PARTITION_MAX_MEMBERS: Int = 2_000_000
+
 @Serializable
 internal data class CohortDescription(
     @SerialName("cohortId") val id: String,
@@ -228,6 +235,7 @@ internal class RedisCohortStorage(
     private val scanLimit: Long,
     private val pipelineBatchSize: Int,
     private val cohortBlobCache: CohortBlobCache,
+    private val diffPartitionMaxMembers: Int = DIFF_PARTITION_MAX_MEMBERS,
 ) : CohortStorage {
     companion object {
         val log by logger()
@@ -263,6 +271,112 @@ internal class RedisCohortStorage(
                 pipeline(updates, pipelineBatchSize)
             }
         }
+    }
+
+    /**
+     * Compute and apply the added/removed membership updates between the existing and new cohort
+     * member sets without issuing any O(cohort size) Redis command.
+     *
+     * SDIFFSTORE was previously used here, but a set difference over the full old/new member sets
+     * executes as a single blocking command on one (single-threaded) shard — multi-second for
+     * multi-million member cohorts — stalling every concurrent command on that shard for its whole
+     * duration, replicas included since they re-execute the replicated command. Instead, both sets
+     * are streamed via SSCAN in [REDIS_SCAN_CHUNK_SIZE] chunks and diffed client-side, so the
+     * largest single Redis command issued is one SSCAN page regardless of cohort size.
+     *
+     * To bound proxy memory, members are hash-partitioned into ceil(size / [diffPartitionMaxMembers])
+     * partitions and diffed one partition at a time: at most one partition of the existing set is
+     * held in memory at once, at the cost of one extra SSCAN pass over both sets per additional
+     * partition.
+     *
+     * Both keys are immutable at this point (the new set is fully written before [CohortIngestionWriter.complete],
+     * the existing set is the previously published version), but they are scanned from the primary
+     * connection to avoid misclassifying members due to replica lag on the just-written new set.
+     */
+    private suspend fun applyMembershipDiff(
+        existingCohortKey: RedisKey,
+        newCohortKey: RedisKey,
+        description: CohortDescription,
+        existingSize: Int,
+        newSize: Int,
+    ): Pair<Long, Long> {
+        val partitions = ((maxOf(existingSize, newSize, 1) - 1) / diffPartitionMaxMembers) + 1
+        val cohortIdSet = setOf(description.id)
+        var addedCount = 0L
+        var removedCount = 0L
+        for (partition in 0 until partitions) {
+            val existingPartition = HashSet<String>()
+            redis.sscanChunked(existingCohortKey, REDIS_SCAN_CHUNK_SIZE) { chunk ->
+                for (member in chunk) {
+                    if (partitions == 1 || partitionOf(member, partitions) == partition) {
+                        existingPartition.add(member)
+                    }
+                }
+            }
+            val added = mutableListOf<String>()
+            redis.sscanChunked(newCohortKey, REDIS_SCAN_CHUNK_SIZE) { chunk ->
+                for (member in chunk) {
+                    if (partitions > 1 && partitionOf(member, partitions) != partition) {
+                        continue
+                    }
+                    // Members present in both versions are drained from the existing partition
+                    // here; whatever remains after the scan is exactly this partition's removals.
+                    if (!existingPartition.remove(member)) {
+                        added.add(member)
+                        if (added.size >= REDIS_SCAN_CHUNK_SIZE) {
+                            addedCount +=
+                                flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                                    redis.saddPipeline(updates, batchSize)
+                                }
+                        }
+                    }
+                }
+            }
+            addedCount +=
+                flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                    redis.saddPipeline(updates, batchSize)
+                }
+            val removed = mutableListOf<String>()
+            for (member in existingPartition) {
+                removed.add(member)
+                if (removed.size >= REDIS_SCAN_CHUNK_SIZE) {
+                    removedCount +=
+                        flushMembershipUpdates(removed, description.groupType, cohortIdSet) { updates, batchSize ->
+                            redis.sremPipeline(updates, batchSize)
+                        }
+                }
+            }
+            removedCount +=
+                flushMembershipUpdates(removed, description.groupType, cohortIdSet) { updates, batchSize ->
+                    redis.sremPipeline(updates, batchSize)
+                }
+        }
+        return addedCount to removedCount
+    }
+
+    private suspend fun flushMembershipUpdates(
+        members: MutableList<String>,
+        groupType: String,
+        cohortIdSet: Set<String>,
+        pipeline: suspend (updates: List<Pair<RedisKey, Set<String>>>, batchSize: Int) -> Unit,
+    ): Long {
+        if (members.isEmpty()) return 0L
+        val updates =
+            members.map { userId ->
+                RedisKey.UserCohortMemberships(prefix, projectId, groupType, userId) to cohortIdSet
+            }
+        pipeline(updates, pipelineBatchSize)
+        val flushed = members.size.toLong()
+        members.clear()
+        return flushed
+    }
+
+    private fun partitionOf(
+        member: String,
+        partitions: Int,
+    ): Int {
+        val hash = member.hashCode() % partitions
+        return if (hash < 0) hash + partitions else hash
     }
 
     override suspend fun getCohort(cohortId: String): Cohort? {
@@ -367,51 +481,18 @@ internal class RedisCohortStorage(
                                 prev.lastModified,
                             )
 
-                        // Create temporary keys for differences - server-side operations
-                        val addedKey =
-                            RedisKey.CohortTemporary(
-                                prefix,
-                                projectId,
-                                description.id,
-                                "added_${System.currentTimeMillis()}",
-                            )
-                        val removedKey =
-                            RedisKey.CohortTemporary(
-                                prefix,
-                                projectId,
-                                description.id,
-                                "removed_${System.currentTimeMillis()}",
-                            )
                         val existingBlobKey = RedisKey.CohortBlob(prefix, projectId, description.id, prev.lastModified)
 
                         try {
-                            // Server-side set operations - no memory transfer to client!
-                            val addedCount = redis.sdiffstore(addedKey, newCohortKey, existingCohortKey)
-                            val removedCount = redis.sdiffstore(removedKey, existingCohortKey, newCohortKey)
+                            val (addedCount, removedCount) =
+                                applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size, finalSize)
                             log.info(
                                 "cohort={} diff: addedCount={}, removedCount={}",
                                 description.id,
                                 addedCount,
                                 removedCount,
                             )
-
-                            // Process added users in streamed chunks
-                            if (addedCount > 0) {
-                                processMembershipUpdates(addedKey, description.groupType, description.id) { updates, batchSize ->
-                                    redis.saddPipeline(updates, batchSize)
-                                }
-                            }
-
-                            // Process removed users in streamed chunks
-                            if (removedCount > 0) {
-                                processMembershipUpdates(removedKey, description.groupType, description.id) { updates, batchSize ->
-                                    redis.sremPipeline(updates, batchSize)
-                                }
-                            }
                         } finally {
-                            // Clean up temporary and existing keys
-                            redis.del(addedKey)
-                            redis.del(removedKey)
                             redis.expire(existingCohortKey, ttl)
                             redis.expire(existingBlobKey, ttl)
                         }
