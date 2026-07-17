@@ -18,6 +18,7 @@ import java.util.Base64
 import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -238,5 +239,47 @@ class CohortStorageTest {
             val stored = storage.getCohort("s1")
             assertEquals(3, stored?.size)
             assertEquals(setOf("u1", "u2", "u3"), stored?.members)
+        }
+
+    @Test
+    fun `pending version set carries a ttl during ingestion, cleared on promotion`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            val membersKey = RedisKey.CohortMembers("amplitude ", "12345", cohortV1.id, "User", 1)
+
+            val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+            acc.addMembers(cohortV1.members.toList())
+            // pending (un-promoted) version set carries a TTL so an aborted refresh self-cleans
+            assertTrue(redis.expirations.containsKey(membersKey.value))
+
+            acc.complete(cohortV1.members.size)
+            // promotion clears the TTL so the current version never expires
+            assertFalse(redis.expirations.containsKey(membersKey.value))
+        }
+
+    @Test
+    fun `unpromoted refresh leaves previous version live and new version self-cleaning`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
+            // v1 promoted
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            run {
+                val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+                acc.addMembers(cohortV1.members.toList())
+                acc.complete(cohortV1.members.size)
+            }
+            // v2 refresh downloads members but never completes (simulates a mid-flight failure)
+            val cohortV2 = cohort("a", lastModified = 2, members = setOf("1", "3"))
+            cohortStorage.createWriter(cohortV2.toCohortDescription()).addMembers(cohortV2.members.toList())
+
+            val v1Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV1.id, "User", 1)
+            val v2Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV2.id, "User", 2)
+            // the published (current) version is untouched by the failed refresh
+            assertFalse(redis.expirations.containsKey(v1Key.value))
+            // the stranded pending version will self-clean via its TTL
+            assertTrue(redis.expirations.containsKey(v2Key.value))
+            // published cohort still reads correctly
+            assertEquals(cohortV1, cohortStorage.getCohort(cohortV1.id))
         }
 }
