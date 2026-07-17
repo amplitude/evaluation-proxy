@@ -20,6 +20,7 @@ import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 // Constants
 private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
@@ -30,6 +31,15 @@ private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
  * extra SSCAN pass over both member sets per additional partition for bounded memory.
  */
 private const val DIFF_PARTITION_MAX_MEMBERS: Int = 2_000_000
+
+/**
+ * TTL applied to a cohort version's member set (and diff temp keys) while a refresh is in
+ * flight, so that a refresh which dies mid-way (Redis timeout, pod restart, etc.) cannot
+ * strand the set in Redis forever. Cleared via PERSIST when the version is promoted to
+ * current. Must comfortably exceed the worst-case download + diff duration for the largest
+ * supported cohort.
+ */
+private val PENDING_VERSION_TTL = 24.hours
 
 @Serializable
 internal data class CohortDescription(
@@ -450,6 +460,7 @@ internal class RedisCohortStorage(
                     description.lastModified,
                 )
             private var existingDescription: CohortDescription? = null
+            private var pendingTtlApplied = false
 
             override suspend fun addMembers(members: List<String>) {
                 if (existingDescription == null) {
@@ -462,6 +473,11 @@ internal class RedisCohortStorage(
                 }
                 if (members.isNotEmpty()) {
                     redis.sadd(newCohortKey, members.toSet())
+                    if (!pendingTtlApplied) {
+                        // Self-clean if this refresh dies before the version is promoted in complete()
+                        redis.expire(newCohortKey, PENDING_VERSION_TTL)
+                        pendingTtlApplied = true
+                    }
                 }
             }
 
@@ -481,21 +497,14 @@ internal class RedisCohortStorage(
                                 prev.lastModified,
                             )
 
-                        val existingBlobKey = RedisKey.CohortBlob(prefix, projectId, description.id, prev.lastModified)
-
-                        try {
-                            val (addedCount, removedCount) =
-                                applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size, finalSize)
-                            log.info(
-                                "cohort={} diff: addedCount={}, removedCount={}",
-                                description.id,
-                                addedCount,
-                                removedCount,
-                            )
-                        } finally {
-                            redis.expire(existingCohortKey, ttl)
-                            redis.expire(existingBlobKey, ttl)
-                        }
+                        val (addedCount, removedCount) =
+                            applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size, finalSize)
+                        log.info(
+                            "cohort={} diff: addedCount={}, removedCount={}",
+                            description.id,
+                            addedCount,
+                            removedCount,
+                        )
                     } else {
                         // No previous cohort: all members are additions
                         processMembershipUpdates(newCohortKey, description.groupType, description.id) { updates, batchSize ->
@@ -512,13 +521,33 @@ internal class RedisCohortStorage(
                 val b64 = Base64.getEncoder().encodeToString(gzBytes)
                 redis.set(blobKey, b64)
 
-                // Publish the cohort description only after successful blob store
+                // Promote this version: clear the pending TTL so the now-current member set
+                // does not expire, then publish the cohort description (only after successful
+                // blob store).
+                redis.persist(newCohortKey)
                 val updatedDescription = description.copy(size = finalSize)
                 val jsonEncodedDescription = json.encodeToString(updatedDescription)
                 redis.hset(
                     RedisKey.CohortDescriptions(prefix, projectId),
                     mapOf(description.id to jsonEncodedDescription),
                 )
+
+                // Retire the previous version only after successful promotion. A failed
+                // refresh must leave the previous (still published) version untouched —
+                // expiring it in a finally block would break reads of the live cohort.
+                if (finalSize > 0 && prev != null && prev.lastModified != description.lastModified) {
+                    val previousCohortKey =
+                        RedisKey.CohortMembers(
+                            prefix,
+                            projectId,
+                            prev.id,
+                            prev.groupType,
+                            prev.lastModified,
+                        )
+                    val previousBlobKey = RedisKey.CohortBlob(prefix, projectId, description.id, prev.lastModified)
+                    redis.expire(previousCohortKey, ttl)
+                    redis.expire(previousBlobKey, ttl)
+                }
             }
         }
     }

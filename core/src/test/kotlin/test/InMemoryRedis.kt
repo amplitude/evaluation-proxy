@@ -133,6 +133,10 @@ internal class InMemoryRedis : Redis {
         expirations[key.value] = ttl
     }
 
+    override suspend fun persist(key: RedisKey) {
+        expirations.remove(key.value)
+    }
+
     override suspend fun saddPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
         batchSize: Int,
