@@ -226,6 +226,9 @@ data class RedisConfiguration(
     val connectionTimeoutMillis: Long = Default.REDIS_CONNECTION_TIMEOUT_MILLIS,
     val commandTimeoutMillis: Long = Default.REDIS_COMMAND_TIMEOUT_MILLIS,
     val pipelineBatchSize: Int = Default.REDIS_PIPELINE_BATCH_SIZE,
+    val streamedCohortDiffEnabled: Boolean = Default.COHORT_STREAMED_DIFF_ENABLED,
+    val cohortDiffPartitionMaxMembers: Int = Default.COHORT_DIFF_PARTITION_MAX_MEMBERS,
+    val cohortDiffScanChunkSize: Int = Default.COHORT_DIFF_SCAN_CHUNK_SIZE,
 ) {
     companion object {
         fun fromEnv(): RedisConfiguration? {
@@ -240,6 +243,12 @@ data class RedisConfiguration(
                 val connectionTimeoutMillis = longEnv(EnvKey.REDIS_CONNECTION_TIMEOUT_MILLIS, Default.REDIS_CONNECTION_TIMEOUT_MILLIS)!!
                 val commandTimeoutMillis = longEnv(EnvKey.REDIS_COMMAND_TIMEOUT_MILLIS, Default.REDIS_COMMAND_TIMEOUT_MILLIS)!!
                 val pipelineBatchSize = intEnv(EnvKey.REDIS_PIPELINE_BATCH_SIZE, Default.REDIS_PIPELINE_BATCH_SIZE)!!
+                val streamedCohortDiffEnabled =
+                    booleanEnv(EnvKey.COHORT_STREAMED_DIFF_ENABLED, Default.COHORT_STREAMED_DIFF_ENABLED)
+                val cohortDiffPartitionMaxMembers =
+                    intEnv(EnvKey.COHORT_DIFF_PARTITION_MAX_MEMBERS, Default.COHORT_DIFF_PARTITION_MAX_MEMBERS)!!
+                val cohortDiffScanChunkSize =
+                    intEnv(EnvKey.COHORT_DIFF_SCAN_CHUNK_SIZE, Default.COHORT_DIFF_SCAN_CHUNK_SIZE)!!
 
                 RedisConfiguration(
                     uri = redisUri,
@@ -251,6 +260,9 @@ data class RedisConfiguration(
                     connectionTimeoutMillis = connectionTimeoutMillis,
                     commandTimeoutMillis = commandTimeoutMillis,
                     pipelineBatchSize = pipelineBatchSize,
+                    streamedCohortDiffEnabled = streamedCohortDiffEnabled,
+                    cohortDiffPartitionMaxMembers = cohortDiffPartitionMaxMembers,
+                    cohortDiffScanChunkSize = cohortDiffScanChunkSize,
                 )
             } else {
                 null
@@ -316,6 +328,10 @@ object EnvKey {
     const val REDIS_COMMAND_TIMEOUT_MILLIS = "AMPLITUDE_REDIS_COMMAND_TIMEOUT_MILLIS"
     const val REDIS_PIPELINE_BATCH_SIZE = "AMPLITUDE_REDIS_PIPELINE_BATCH_SIZE"
 
+    const val COHORT_STREAMED_DIFF_ENABLED = "AMPLITUDE_COHORT_STREAMED_DIFF_ENABLED"
+    const val COHORT_DIFF_PARTITION_MAX_MEMBERS = "AMPLITUDE_COHORT_DIFF_PARTITION_MAX_MEMBERS"
+    const val COHORT_DIFF_SCAN_CHUNK_SIZE = "AMPLITUDE_COHORT_DIFF_SCAN_CHUNK_SIZE"
+
     const val METRICS_PORT = "AMPLITUDE_METRICS_PORT"
     const val METRICS_PATH = "AMPLITUDE_METRICS_PATH"
     const val METRICS_LOG_FAILURES = "AMPLITUDE_METRICS_LOG_FAILURES"
@@ -356,6 +372,10 @@ object Default {
     const val REDIS_CONNECTION_TIMEOUT_MILLIS = 10000L
     const val REDIS_COMMAND_TIMEOUT_MILLIS = 10000L
     const val REDIS_PIPELINE_BATCH_SIZE = 100
+
+    const val COHORT_STREAMED_DIFF_ENABLED = false
+    const val COHORT_DIFF_PARTITION_MAX_MEMBERS = 2_000_000
+    const val COHORT_DIFF_SCAN_CHUNK_SIZE = 1000
 
     const val METRICS_PORT = 9090
     const val METRICS_PATH = "metrics"

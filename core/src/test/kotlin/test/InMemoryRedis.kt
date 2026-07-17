@@ -36,6 +36,9 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun del(key: RedisKey) {
         kv.remove(key.value)
+        sets.remove(key.value)
+        hashes.remove(key.value)
+        expirations.remove(key.value)
     }
 
     override suspend fun sadd(
@@ -61,6 +64,10 @@ internal class InMemoryRedis : Redis {
 
     override suspend fun smembers(key: RedisKey): Set<String> {
         return sets[key.value] ?: emptySet()
+    }
+
+    override suspend fun scard(key: RedisKey): Long {
+        return (sets[key.value]?.size ?: 0).toLong()
     }
 
     override suspend fun sismember(
@@ -188,5 +195,15 @@ internal class InMemoryRedis : Redis {
         } else {
             false // No active lock to release
         }
+    }
+
+    override suspend fun renewLock(
+        key: RedisKey,
+        ttlSeconds: Long,
+    ): Boolean {
+        val keyStr = key.value
+        val expectedValue = activeLocks[keyStr] ?: return false
+        // Note: InMemory doesn't implement TTL expiration for simplicity
+        return kv[keyStr] == expectedValue
     }
 }

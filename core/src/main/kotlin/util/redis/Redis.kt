@@ -36,6 +36,8 @@ internal interface Redis {
 
     suspend fun smembers(key: RedisKey): Set<String>
 
+    suspend fun scard(key: RedisKey): Long
+
     suspend fun sismember(
         key: RedisKey,
         value: String,
@@ -107,4 +109,13 @@ internal interface Redis {
      * Only releases locks that were acquired by this Redis instance.
      */
     suspend fun releaseLock(key: RedisKey): Boolean
+
+    /**
+     * Extend the TTL of a lock previously acquired via [acquireLock] on this instance.
+     * Returns false if the lock is no longer held by this instance (expired or taken over).
+     */
+    suspend fun renewLock(
+        key: RedisKey,
+        ttlSeconds: Long,
+    ): Boolean
 }
