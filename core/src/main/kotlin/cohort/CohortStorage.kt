@@ -401,11 +401,15 @@ internal class RedisCohortStorage(
 
                         try {
                             // Server-side set operations - no memory transfer to client!
+                            // Backstop TTLs are armed immediately after each SDIFFSTORE (not
+                            // after both): the second SDIFFSTORE is itself a multi-second
+                            // blocking command on large cohorts, so addedKey would otherwise
+                            // sit unprotected through the likeliest crash window. If this
+                            // process dies before the DELs below run, the temp keys
+                            // self-clean instead of persisting forever.
                             val addedCount = redis.sdiffstore(addedKey, newCohortKey, existingCohortKey)
-                            val removedCount = redis.sdiffstore(removedKey, existingCohortKey, newCohortKey)
-                            // Backstop TTLs: if this process dies before the DELs below run,
-                            // the temp keys self-clean instead of persisting forever.
                             redis.expire(addedKey, PENDING_VERSION_TTL)
+                            val removedCount = redis.sdiffstore(removedKey, existingCohortKey, newCohortKey)
                             redis.expire(removedKey, PENDING_VERSION_TTL)
                             log.info(
                                 "cohort={} diff: addedCount={}, removedCount={}",
