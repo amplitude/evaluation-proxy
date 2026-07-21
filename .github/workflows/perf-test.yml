@@ -10,6 +10,11 @@ on:
         description: 'Git SHA to build (defaults to current HEAD)'
         required: false
         type: string
+      cohort_streamed_diff_enabled:
+        description: 'Set AMPLITUDE_COHORT_STREAMED_DIFF_ENABLED=true on the perf-test deployment'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   trigger-sdk-tests:
@@ -27,6 +32,15 @@ jobs:
             echo "sha=${{ github.event.inputs.sha }}" >> $GITHUB_OUTPUT
           else
             echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get cohort streamed diff flag
+        id: get-flag
+        run: |
+          if [ "${{ github.event.inputs.cohort_streamed_diff_enabled }}" = "true" ]; then
+            echo "cohort_streamed_diff_enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "cohort_streamed_diff_enabled=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate GitHub App token
@@ -49,7 +63,8 @@ jobs:
                 "ref": "${{ github.ref }}",
                 "repo_url": "${{ github.repositoryUrl }}",
                 "triggered_by": "${{ github.actor }}",
-                "workflow_run_id": "${{ github.run_id }}"
+                "workflow_run_id": "${{ github.run_id }}",
+                "cohort_streamed_diff_enabled": "${{ steps.get-flag.outputs.cohort_streamed_diff_enabled }}"
               }
             }'
 
@@ -60,5 +75,6 @@ jobs:
           echo "- **SHA**: ${{ steps.get-sha.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Ref**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cohort streamed diff enabled**: ${{ steps.get-flag.outputs.cohort_streamed_diff_enabled }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Check the [sdk-tests workflow runs](https://github.com/amplitude/sdk-tests/actions) for build progress." >> $GITHUB_STEP_SUMMARY
