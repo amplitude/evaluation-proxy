@@ -47,6 +47,12 @@ internal class CohortLoader(
                         }
                     } else {
                         log.debug("loadCohort: cohort not modified - cohortId={}", cohortId)
+                        // Repair path: a previous refresh that died between publishing the
+                        // description and clearing the pending ingestion TTL left the live
+                        // member set with an expiry armed; clear it here (O(1) no-op otherwise).
+                        if (storageCohort != null) {
+                            cohortStorage.ensureCurrentVersionPersisted(storageCohort)
+                        }
                     }
                 } catch (t: Throwable) {
                     // Don't throw if we fail to download the cohort. We

@@ -9,6 +9,7 @@ import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.cohort.toCohortDescription
 import com.amplitude.util.json
+import com.amplitude.util.redis.Redis
 import com.amplitude.util.redis.RedisKey
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
@@ -463,5 +464,62 @@ class CohortStorageTest {
             assertTrue(redis.expirations.containsKey(v2Key.value))
             // published cohort still reads correctly
             assertEquals(cohortV1, cohortStorage.getCohort(cohortV1.id))
+        }
+
+    @Test
+    fun `refresh that fails at publish keeps the pending ttl so the set self-cleans`(): Unit =
+        runBlocking {
+            // Fails the description hset on demand to simulate a refresh dying at the
+            // publish step — the pending version must keep its self-clean TTL.
+            var failHset = false
+            val faultyRedis =
+                object : Redis by redis {
+                    override suspend fun hset(
+                        key: RedisKey,
+                        values: Map<String, String>,
+                    ) {
+                        if (failHset) throw RuntimeException("injected hset failure")
+                        redis.hset(key, values)
+                    }
+                }
+            val cohortStorage =
+                RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", faultyRedis, redis, 1000, 1000, CohortBlobCache())
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            run {
+                val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+                acc.addMembers(cohortV1.members.toList())
+                acc.complete(cohortV1.members.size)
+            }
+            val cohortV2 = cohort("a", lastModified = 2, members = setOf("1", "3"))
+            failHset = true
+            val acc = cohortStorage.createWriter(cohortV2.toCohortDescription())
+            acc.addMembers(cohortV2.members.toList())
+            assertFailsWith<RuntimeException> { acc.complete(cohortV2.members.size) }
+            failHset = false
+
+            val v2Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV2.id, "User", 2)
+            // publish never happened, so the pending TTL must still be armed (self-clean)
+            assertTrue(redis.expirations.containsKey(v2Key.value))
+            // and the published description still points at v1
+            assertEquals(1L, cohortStorage.getCohortDescription("a")?.lastModified)
+        }
+
+    @Test
+    fun `ensureCurrentVersionPersisted clears a stray ttl on the published version`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            run {
+                val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+                acc.addMembers(cohortV1.members.toList())
+                acc.complete(cohortV1.members.size)
+            }
+            val v1Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV1.id, "User", 1)
+            // simulate a refresh that died between publish and persist: live set with a fuse
+            redis.expire(v1Key, Duration.INFINITE)
+            assertTrue(redis.expirations.containsKey(v1Key.value))
+
+            cohortStorage.ensureCurrentVersionPersisted(cohortV1.toCohortDescription())
+            assertFalse(redis.expirations.containsKey(v1Key.value))
         }
 }

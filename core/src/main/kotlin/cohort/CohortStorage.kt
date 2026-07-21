@@ -116,6 +116,14 @@ internal interface CohortStorage {
      * Release the distributed lock for cohort loading.
      */
     suspend fun releaseCohortLoadingLock(cohortId: String)
+
+    /**
+     * Ensure the published (current) version's member set has no expiry armed. A refresh that
+     * dies between publishing the description and clearing the pending ingestion TTL leaves the
+     * live set with a fuse; calling this on every not-modified sync cycle repairs that within
+     * one cycle. O(1), safe to call unconditionally.
+     */
+    suspend fun ensureCurrentVersionPersisted(description: CohortDescription)
 }
 
 // Streaming ingestion writer contract
@@ -243,6 +251,10 @@ internal class InMemoryCohortStorage : CohortStorage {
 
     override suspend fun releaseCohortLoadingLock(cohortId: String) {
         // No-op for in-memory storage
+    }
+
+    override suspend fun ensureCurrentVersionPersisted(description: CohortDescription) {
+        // No-op for in-memory storage: nothing expires
     }
 }
 
@@ -730,16 +742,19 @@ internal class RedisCohortStorage(
                 val b64 = Base64.getEncoder().encodeToString(gzBytes)
                 redis.set(blobKey, b64)
 
-                // Promote this version: clear the pending TTL so the now-current member set
-                // does not expire, then publish the cohort description (only after successful
-                // blob store).
-                redis.persist(newCohortKey)
+                // Promote this version: publish the cohort description (only after successful
+                // blob store), then clear the pending TTL so the now-current member set does
+                // not expire. Publish-then-persist means a refresh that dies anywhere before
+                // the publish always leaves a set that self-cleans via its pending TTL; the
+                // one-command window where the published set still carries the TTL is repaired
+                // by [ensureCurrentVersionPersisted] on the next sync cycle.
                 val updatedDescription = description.copy(size = finalSize)
                 val jsonEncodedDescription = json.encodeToString(updatedDescription)
                 redis.hset(
                     RedisKey.CohortDescriptions(prefix, projectId),
                     mapOf(description.id to jsonEncodedDescription),
                 )
+                redis.persist(newCohortKey)
 
                 // Retire the previous version only after successful promotion. A failed
                 // refresh must leave the previous (still published) version untouched —
@@ -811,6 +826,18 @@ internal class RedisCohortStorage(
             loadingLockTtls[cohortId] = lockTimeoutSeconds.toLong()
         }
         return acquired
+    }
+
+    override suspend fun ensureCurrentVersionPersisted(description: CohortDescription) {
+        redis.persist(
+            RedisKey.CohortMembers(
+                prefix,
+                projectId,
+                description.id,
+                description.groupType,
+                description.lastModified,
+            ),
+        )
     }
 
     override suspend fun releaseCohortLoadingLock(cohortId: String) {
