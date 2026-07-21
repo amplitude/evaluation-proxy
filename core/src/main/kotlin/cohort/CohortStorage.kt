@@ -310,12 +310,13 @@ internal class RedisCohortStorage(
      * Compute and apply the added/removed membership updates between the existing and new cohort
      * member sets without issuing any O(cohort size) Redis command.
      *
-     * SDIFFSTORE was previously used here, but a set difference over the full old/new member sets
-     * executes as a single blocking command on one (single-threaded) shard — multi-second for
-     * multi-million member cohorts — stalling every concurrent command on that shard for its whole
-     * duration, replicas included since they re-execute the replicated command. Instead, both sets
-     * are streamed via SSCAN in [diffScanChunkSize] chunks and diffed client-side, so the
-     * largest single Redis command issued is one SSCAN page regardless of cohort size.
+     * Opt-in alternative to [applySdiffstoreDiff] (the default): a SDIFFSTORE over the full
+     * old/new member sets executes as a single blocking command on one (single-threaded) shard —
+     * multi-second for multi-million member cohorts — stalling every concurrent command on that
+     * shard for its whole duration, replicas included since they re-execute the replicated
+     * command. Here both sets are instead streamed via SSCAN in [diffScanChunkSize] chunks and
+     * diffed client-side, so the largest single Redis command issued is one SSCAN page regardless
+     * of cohort size.
      *
      * To bound proxy memory, members are hash-partitioned into ceil(size / [diffPartitionMaxMembers])
      * partitions and diffed one partition at a time: at most one partition of the existing set is
