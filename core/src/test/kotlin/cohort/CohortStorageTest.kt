@@ -346,6 +346,56 @@ class CohortStorageTest {
     }
 
     @Test
+    fun `test redis, streamed diff partitions by actual cardinality when description size understates the key`(): Unit =
+        runBlocking {
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    streamedDiffEnabled = true,
+                    diffPartitionMaxMembers = 3,
+                )
+            // v1 publishes with size 4...
+            val v1 = cohort("p", lastModified = 1, members = (1..4).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            // ...but the version key actually holds 10 members (residue of a crashed ingest),
+            // so the description understates the cardinality the diff must partition over.
+            redis.sadd(
+                RedisKey.CohortMembers("amplitude ", "12345", "p", "User", 1),
+                (5..10).map { "u$it" }.toSet(),
+            )
+            // v2 keeps u3-u8 and adds u11-u12
+            val v2 = cohort("p", lastModified = 2, members = ((3..8) + (11..12)).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in (1..2) + (9..10)) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            // Retained members with real memberships keep them; newly added members gain them.
+            for (member in (3..4) + (11..12)) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$member"))
+            }
+            // Residue members present in both version keys are (correctly) untouched by the
+            // diff — same as SDIFFSTORE semantics — so they never gain a membership.
+            for (residue in 5..8) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$residue"))
+            }
+        }
+
+    @Test
     fun `test redis, streamed diff falls back to all additions when existing members key is missing`(): Unit =
         runBlocking {
             val cohortStorage =

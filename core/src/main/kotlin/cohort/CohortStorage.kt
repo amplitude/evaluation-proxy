@@ -353,7 +353,6 @@ internal class RedisCohortStorage(
         newCohortKey: RedisKey,
         description: CohortDescription,
         existingSize: Int,
-        newSize: Int,
     ) {
         val existingCard = redis.scard(existingCohortKey)
         val newCard = redis.scard(newCohortKey)
@@ -362,7 +361,11 @@ internal class RedisCohortStorage(
             applyAllAdditions(newCohortKey, description, existingSize, newCard, cohortIdSet)
             return
         }
-        val partitions = ((maxOf(existingSize, newSize, 1) - 1) / diffPartitionMaxMembers) + 1
+        // Partition count is derived from the SCARD cardinalities, not the description-reported
+        // sizes: a crashed ingest can leave a version key holding more members than its published
+        // size, and an understated partition count would hold more than [diffPartitionMaxMembers]
+        // in memory at once — the bound this partitioning exists to enforce.
+        val partitions = ((maxOf(existingCard, newCard, 1L) - 1L) / diffPartitionMaxMembers).toInt() + 1
         var addedCount = 0L
         var removedCount = 0L
         var existingDistinct = 0L
@@ -722,7 +725,7 @@ internal class RedisCohortStorage(
                             )
 
                         if (streamedDiffEnabled) {
-                            applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size, finalSize)
+                            applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size)
                         } else {
                             applySdiffstoreDiff(existingCohortKey, newCohortKey, description)
                         }
