@@ -239,6 +239,12 @@ internal class RedisConnection(
         }
     }
 
+    override suspend fun persist(key: RedisKey) {
+        connection.run {
+            persist(key.value)
+        }
+    }
+
     override suspend fun saddPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
         batchSize: Int,

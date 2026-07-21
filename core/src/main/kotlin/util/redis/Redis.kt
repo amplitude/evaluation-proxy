@@ -80,6 +80,8 @@ internal interface Redis {
         ttl: Duration,
     )
 
+    suspend fun persist(key: RedisKey)
+
     suspend fun saddPipeline(
         commands: List<Pair<RedisKey, Set<String>>>,
         batchSize: Int,
