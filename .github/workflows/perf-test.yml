@@ -10,6 +10,11 @@ on:
         description: 'Git SHA to build (defaults to current HEAD)'
         required: false
         type: string
+      cohort_streamed_diff_enabled:
+        description: 'Set AMPLITUDE_COHORT_STREAMED_DIFF_ENABLED=true on the perf-test deployment'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   trigger-sdk-tests:
@@ -22,11 +27,25 @@ jobs:
 
       - name: Get commit SHA
         id: get-sha
+        env:
+          INPUT_SHA: ${{ github.event.inputs.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          if [ -n "${{ github.event.inputs.sha }}" ]; then
-            echo "sha=${{ github.event.inputs.sha }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_SHA" ]; then
+            echo "sha=$INPUT_SHA" >> "$GITHUB_OUTPUT"
           else
-            echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get cohort streamed diff flag
+        id: get-flag
+        env:
+          COHORT_STREAMED_DIFF_ENABLED: ${{ github.event.inputs.cohort_streamed_diff_enabled }}
+        run: |
+          if [ "$COHORT_STREAMED_DIFF_ENABLED" = "true" ]; then
+            echo "cohort_streamed_diff_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cohort_streamed_diff_enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate GitHub App token
@@ -37,28 +56,53 @@ jobs:
           application_private_key: ${{ secrets.EVALUATION_PROXY_INTEGRATION_KEY }}
 
       - name: Trigger sdk-tests workflow
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          SHA: ${{ steps.get-sha.outputs.sha }}
+          REF: ${{ github.ref }}
+          REPO_URL: ${{ github.repositoryUrl }}
+          TRIGGERED_BY: ${{ github.actor }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          COHORT_STREAMED_DIFF_ENABLED: ${{ steps.get-flag.outputs.cohort_streamed_diff_enabled }}
         run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
-            https://api.github.com/repos/amplitude/sdk-tests/dispatches \
-            -d '{
-              "event_type": "evaluation-proxy-tests",
-              "client_payload": {
-                "sha": "${{ steps.get-sha.outputs.sha }}",
-                "ref": "${{ github.ref }}",
-                "repo_url": "${{ github.repositoryUrl }}",
-                "triggered_by": "${{ github.actor }}",
-                "workflow_run_id": "${{ github.run_id }}"
+          jq -n \
+            --arg sha "$SHA" \
+            --arg ref "$REF" \
+            --arg repo_url "$REPO_URL" \
+            --arg triggered_by "$TRIGGERED_BY" \
+            --arg workflow_run_id "$WORKFLOW_RUN_ID" \
+            --arg cohort_streamed_diff_enabled "$COHORT_STREAMED_DIFF_ENABLED" \
+            '{
+              event_type: "evaluation-proxy-tests",
+              client_payload: {
+                sha: $sha,
+                ref: $ref,
+                repo_url: $repo_url,
+                triggered_by: $triggered_by,
+                workflow_run_id: $workflow_run_id,
+                cohort_streamed_diff_enabled: $cohort_streamed_diff_enabled
               }
-            }'
+            }' \
+          | curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${GH_TOKEN}" \
+            https://api.github.com/repos/amplitude/sdk-tests/dispatches \
+            -d @-
 
       - name: Output summary
+        env:
+          SHA: ${{ steps.get-sha.outputs.sha }}
+          REF: ${{ github.ref }}
+          TRIGGERED_BY: ${{ github.actor }}
+          COHORT_STREAMED_DIFF_ENABLED: ${{ steps.get-flag.outputs.cohort_streamed_diff_enabled }}
         run: |
-          echo "## Triggered SDK Tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **SHA**: ${{ steps.get-sha.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Ref**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Check the [sdk-tests workflow runs](https://github.com/amplitude/sdk-tests/actions) for build progress." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Triggered SDK Tests"
+            echo ""
+            echo "- **SHA**: $SHA"
+            echo "- **Ref**: $REF"
+            echo "- **Triggered by**: $TRIGGERED_BY"
+            echo "- **Cohort streamed diff enabled**: $COHORT_STREAMED_DIFF_ENABLED"
+            echo ""
+            echo "Check the [sdk-tests workflow runs](https://github.com/amplitude/sdk-tests/actions) for build progress."
+          } >> "$GITHUB_STEP_SUMMARY"
