@@ -152,6 +152,10 @@ internal class RedisClusterConnection(
         return connection.run { smembers(key.value) }
     }
 
+    override suspend fun scard(key: RedisKey): Long {
+        return connection.run { scard(key.value) }
+    }
+
     override suspend fun sismember(
         key: RedisKey,
         value: String,
@@ -282,7 +286,7 @@ internal class RedisClusterConnection(
         ttlSeconds: Long,
     ): Boolean {
         // Generate unique lock value internally
-        val lockValue = "${'$'}{System.currentTimeMillis()}-${'$'}{Thread.currentThread().id}-${'$'}{java.util.UUID.randomUUID()}"
+        val lockValue = "${System.currentTimeMillis()}-${Thread.currentThread().id}-${java.util.UUID.randomUUID()}"
 
         val result =
             connection.run {
@@ -328,6 +332,33 @@ internal class RedisClusterConnection(
         }
 
         return released
+    }
+
+    override suspend fun renewLock(
+        key: RedisKey,
+        ttlSeconds: Long,
+    ): Boolean {
+        val lockValue =
+            synchronized(activeLocks) {
+                activeLocks[key.value]
+            } ?: return false
+
+        // Use Lua script for atomic compare-and-expire
+        val script =
+            """
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+                return redis.call("expire", KEYS[1], ARGV[2])
+            else
+                return 0
+            end
+            """.trimIndent()
+
+        val result =
+            connection.run {
+                eval<Long>(script, io.lettuce.core.ScriptOutputType.INTEGER, arrayOf(key.value), lockValue, ttlSeconds.toString())
+            }
+
+        return result == 1L
     }
 
     suspend fun pipeline(block: suspend RedisAdvancedClusterAsyncCommands<String, String>.() -> List<RedisFuture<*>>) {

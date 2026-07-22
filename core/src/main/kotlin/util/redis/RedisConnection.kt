@@ -152,6 +152,10 @@ internal class RedisConnection(
         return connection.run { smembers(key.value) }
     }
 
+    override suspend fun scard(key: RedisKey): Long {
+        return connection.run { scard(key.value) }
+    }
+
     override suspend fun sismember(
         key: RedisKey,
         value: String,
@@ -282,7 +286,7 @@ internal class RedisConnection(
         ttlSeconds: Long,
     ): Boolean {
         // Generate unique lock value internally
-        val lockValue = "${'$'}{System.currentTimeMillis()}-${'$'}{Thread.currentThread().id}-${'$'}{java.util.UUID.randomUUID()}"
+        val lockValue = "${System.currentTimeMillis()}-${Thread.currentThread().id}-${java.util.UUID.randomUUID()}"
 
         val result =
             connection.run {
@@ -323,13 +327,40 @@ internal class RedisConnection(
 
             val released = result == 1L
             if (!released) {
-                log.warn("Failed to release lock for key ${'$'}{key.value} - lock may have expired or been taken by another process")
+                log.warn("Failed to release lock for key ${key.value} - lock may have expired or been taken by another process")
             }
             released
         } else {
-            log.warn("Attempted to release lock for key ${'$'}{key.value} but no active lock found")
+            log.warn("Attempted to release lock for key ${key.value} but no active lock found")
             false
         }
+    }
+
+    override suspend fun renewLock(
+        key: RedisKey,
+        ttlSeconds: Long,
+    ): Boolean {
+        val lockValue =
+            synchronized(activeLocks) {
+                activeLocks[key.value]
+            } ?: return false
+
+        // Use Lua script for atomic compare-and-expire
+        val luaScript =
+            """
+            if redis.call("GET", KEYS[1]) == ARGV[1] then
+                return redis.call("EXPIRE", KEYS[1], ARGV[2])
+            else
+                return 0
+            end
+            """.trimIndent()
+
+        val result =
+            connection.run {
+                eval<Long>(luaScript, io.lettuce.core.ScriptOutputType.INTEGER, arrayOf(key.value), lockValue, ttlSeconds.toString())
+            }
+
+        return result == 1L
     }
 
     private suspend fun pipeline(block: RedisAsyncCommands<String, String>.() -> List<RedisFuture<*>>) {

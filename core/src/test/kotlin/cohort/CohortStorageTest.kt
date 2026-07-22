@@ -9,6 +9,7 @@ import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.cohort.RedisCohortStorage
 import com.amplitude.cohort.toCohortDescription
 import com.amplitude.util.json
+import com.amplitude.util.redis.Redis
 import com.amplitude.util.redis.RedisKey
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
@@ -18,6 +19,7 @@ import java.util.Base64
 import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -206,6 +208,237 @@ class CohortStorageTest {
         }
 
     @Test
+    fun `test redis, cohort update diffs client side across partitions`(): Unit =
+        runBlocking {
+            // diffPartitionMaxMembers=3 forces multiple hash partitions for a 10-member cohort so
+            // the partitioned code path is exercised, not just the single-partition fast path.
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    streamedDiffEnabled = true,
+                    diffPartitionMaxMembers = 3,
+                )
+            val v1 = cohort("p", lastModified = 1, members = (1..10).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            for (member in 1..10) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$member"))
+            }
+            // v2 removes u1-u5 and adds u11-u15
+            val v2 = cohort("p", lastModified = 2, members = (6..15).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in 1..5) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            for (retained in 6..15) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$retained"))
+            }
+        }
+
+    @Test
+    fun `test redis, cohort update uses sdiffstore path by default`(): Unit =
+        runBlocking {
+            // Same update scenario as the streamed-diff test, but with the flag left at its
+            // default (off) so the server-side SDIFFSTORE path is exercised.
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                )
+            val v1 = cohort("p", lastModified = 1, members = (1..10).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            val v2 = cohort("p", lastModified = 2, members = (6..15).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in 1..5) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            for (retained in 6..15) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$retained"))
+            }
+        }
+
+    @Test
+    fun `test redis, streamed diff flushes adds and removals above chunk threshold`(): Unit =
+        runBlocking {
+            // >1000 additions and >1000 removals in a single partition so the incremental
+            // flush branches (added/removed buffers reaching diffScanChunkSize) are exercised.
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    streamedDiffEnabled = true,
+                )
+            val v1 = cohort("p", lastModified = 1, members = (1..2500).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            // v2 removes u1-u1300 and adds u2501-u3800
+            val v2 = cohort("p", lastModified = 2, members = (1301..3800).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in 1..1300) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            for (retained in 1301..3800) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$retained"))
+            }
+        }
+
+    @Test
+    fun `test redis, rejects non-positive diff tuning values`() {
+        assertFailsWith<IllegalArgumentException> {
+            RedisCohortStorage(
+                "12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache(),
+                diffPartitionMaxMembers = 0,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            RedisCohortStorage(
+                "12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache(),
+                diffPartitionMaxMembers = -2_000_000,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            RedisCohortStorage(
+                "12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache(),
+                diffScanChunkSize = 0,
+            )
+        }
+    }
+
+    @Test
+    fun `test redis, streamed diff partitions by actual cardinality when description size understates the key`(): Unit =
+        runBlocking {
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    streamedDiffEnabled = true,
+                    diffPartitionMaxMembers = 3,
+                )
+            // v1 publishes with size 4...
+            val v1 = cohort("p", lastModified = 1, members = (1..4).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            // ...but the version key actually holds 10 members (residue of a crashed ingest),
+            // so the description understates the cardinality the diff must partition over.
+            redis.sadd(
+                RedisKey.CohortMembers("amplitude ", "12345", "p", "User", 1),
+                (5..10).map { "u$it" }.toSet(),
+            )
+            // v2 keeps u3-u8 and adds u11-u12
+            val v2 = cohort("p", lastModified = 2, members = ((3..8) + (11..12)).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            for (removed in (1..2) + (9..10)) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$removed"))
+            }
+            // Retained members with real memberships keep them; newly added members gain them.
+            for (member in (3..4) + (11..12)) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$member"))
+            }
+            // Residue members present in both version keys are (correctly) untouched by the
+            // diff — same as SDIFFSTORE semantics — so they never gain a membership.
+            for (residue in 5..8) {
+                assertEquals(emptySet(), cohortStorage.getCohortMemberships("User", "u$residue"))
+            }
+        }
+
+    @Test
+    fun `test redis, streamed diff falls back to all additions when existing members key is missing`(): Unit =
+        runBlocking {
+            val cohortStorage =
+                RedisCohortStorage(
+                    "12345",
+                    Duration.INFINITE,
+                    "amplitude ",
+                    redis,
+                    redis,
+                    1000,
+                    1000,
+                    CohortBlobCache(),
+                    streamedDiffEnabled = true,
+                )
+            val v1 = cohort("p", lastModified = 1, members = (1..5).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v1.toCohortDescription())
+                acc.addMembers(v1.members.toList())
+                acc.complete(v1.members.size)
+            }
+            // Simulate the published version's members key expiring/being deleted out from
+            // under the diff.
+            redis.del(RedisKey.CohortMembers("amplitude ", "12345", "p", "User", 1))
+            val v2 = cohort("p", lastModified = 2, members = (3..7).map { "u$it" }.toSet())
+            run {
+                val acc = cohortStorage.createWriter(v2.toCohortDescription())
+                acc.addMembers(v2.members.toList())
+                acc.complete(v2.members.size)
+            }
+            // The refresh must still publish the new version...
+            assertEquals(2L, cohortStorage.getCohortDescription("p")?.lastModified)
+            // ...with every new member present.
+            for (added in 3..7) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$added"))
+            }
+            // Members dropped between versions keep a stale membership in this degraded state
+            // (matching SDIFFSTORE semantics for a missing existing key).
+            for (stale in 1..2) {
+                assertEquals(setOf("p"), cohortStorage.getCohortMemberships("User", "u$stale"))
+            }
+        }
+
+    @Test
     fun `test redis, put large cohort, no OutOfMemoryError`(): Unit =
         runBlocking {
             val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
@@ -281,5 +514,62 @@ class CohortStorageTest {
             assertTrue(redis.expirations.containsKey(v2Key.value))
             // published cohort still reads correctly
             assertEquals(cohortV1, cohortStorage.getCohort(cohortV1.id))
+        }
+
+    @Test
+    fun `refresh that fails at publish keeps the pending ttl so the set self-cleans`(): Unit =
+        runBlocking {
+            // Fails the description hset on demand to simulate a refresh dying at the
+            // publish step — the pending version must keep its self-clean TTL.
+            var failHset = false
+            val faultyRedis =
+                object : Redis by redis {
+                    override suspend fun hset(
+                        key: RedisKey,
+                        values: Map<String, String>,
+                    ) {
+                        if (failHset) throw RuntimeException("injected hset failure")
+                        redis.hset(key, values)
+                    }
+                }
+            val cohortStorage =
+                RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", faultyRedis, redis, 1000, 1000, CohortBlobCache())
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            run {
+                val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+                acc.addMembers(cohortV1.members.toList())
+                acc.complete(cohortV1.members.size)
+            }
+            val cohortV2 = cohort("a", lastModified = 2, members = setOf("1", "3"))
+            failHset = true
+            val acc = cohortStorage.createWriter(cohortV2.toCohortDescription())
+            acc.addMembers(cohortV2.members.toList())
+            assertFailsWith<RuntimeException> { acc.complete(cohortV2.members.size) }
+            failHset = false
+
+            val v2Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV2.id, "User", 2)
+            // publish never happened, so the pending TTL must still be armed (self-clean)
+            assertTrue(redis.expirations.containsKey(v2Key.value))
+            // and the published description still points at v1
+            assertEquals(1L, cohortStorage.getCohortDescription("a")?.lastModified)
+        }
+
+    @Test
+    fun `ensureCurrentVersionPersisted clears a stray ttl on the published version`(): Unit =
+        runBlocking {
+            val cohortStorage = RedisCohortStorage("12345", Duration.INFINITE, "amplitude ", redis, redis, 1000, 1000, CohortBlobCache())
+            val cohortV1 = cohort("a", lastModified = 1, members = setOf("1", "2"))
+            run {
+                val acc = cohortStorage.createWriter(cohortV1.toCohortDescription())
+                acc.addMembers(cohortV1.members.toList())
+                acc.complete(cohortV1.members.size)
+            }
+            val v1Key = RedisKey.CohortMembers("amplitude ", "12345", cohortV1.id, "User", 1)
+            // simulate a refresh that died between publish and persist: live set with a fuse
+            redis.expire(v1Key, Duration.INFINITE)
+            assertTrue(redis.expirations.containsKey(v1Key.value))
+
+            cohortStorage.ensureCurrentVersionPersisted(cohortV1.toCohortDescription())
+            assertFalse(redis.expirations.containsKey(v1Key.value))
         }
 }

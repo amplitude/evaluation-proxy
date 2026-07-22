@@ -26,6 +26,13 @@ import kotlin.time.Duration.Companion.hours
 private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
 
 /**
+ * Maximum number of existing-set members held in proxy memory at once while diffing two cohort
+ * versions. Cohorts larger than this are diffed in ceil(size / limit) hash partitions, trading one
+ * extra SSCAN pass over both member sets per additional partition for bounded memory.
+ */
+private const val DIFF_PARTITION_MAX_MEMBERS: Int = 2_000_000
+
+/**
  * TTL applied to a cohort version's member set (and diff temp keys) while a refresh is in
  * flight, so that a refresh which dies mid-way (Redis timeout, pod restart, etc.) cannot
  * strand the set in Redis forever. Cleared via PERSIST when the version is promoted to
@@ -33,6 +40,13 @@ private const val REDIS_SCAN_CHUNK_SIZE: Int = 1000
  * supported cohort.
  */
 private val PENDING_VERSION_TTL = 24.hours
+
+/**
+ * How often (in SSCAN pages / pipeline flushes) the streamed diff renews the cohort-loading lock.
+ * A single partition pass over a multi-million member cohort can run for minutes — longer than the
+ * lock TTL — so renewing only between passes is not enough to keep a second instance out.
+ */
+private const val LOCK_RENEWAL_SCAN_PAGES: Int = 512
 
 @Serializable
 internal data class CohortDescription(
@@ -102,6 +116,14 @@ internal interface CohortStorage {
      * Release the distributed lock for cohort loading.
      */
     suspend fun releaseCohortLoadingLock(cohortId: String)
+
+    /**
+     * Ensure the published (current) version's member set has no expiry armed. A refresh that
+     * dies between publishing the description and clearing the pending ingestion TTL leaves the
+     * live set with a fuse; calling this on every not-modified sync cycle repairs that within
+     * one cycle. O(1), safe to call unconditionally.
+     */
+    suspend fun ensureCurrentVersionPersisted(description: CohortDescription)
 }
 
 // Streaming ingestion writer contract
@@ -127,6 +149,9 @@ internal fun getCohortStorage(
             redisConfiguration.scanLimit,
             redisConfiguration.pipelineBatchSize,
             CohortBlobCache(),
+            redisConfiguration.streamedCohortDiffEnabled,
+            redisConfiguration.cohortDiffPartitionMaxMembers,
+            redisConfiguration.cohortDiffScanChunkSize,
         )
     } else {
         InMemoryCohortStorage()
@@ -227,6 +252,10 @@ internal class InMemoryCohortStorage : CohortStorage {
     override suspend fun releaseCohortLoadingLock(cohortId: String) {
         // No-op for in-memory storage
     }
+
+    override suspend fun ensureCurrentVersionPersisted(description: CohortDescription) {
+        // No-op for in-memory storage: nothing expires
+    }
 }
 
 internal class RedisCohortStorage(
@@ -238,13 +267,27 @@ internal class RedisCohortStorage(
     private val scanLimit: Long,
     private val pipelineBatchSize: Int,
     private val cohortBlobCache: CohortBlobCache,
+    private val streamedDiffEnabled: Boolean = false,
+    private val diffPartitionMaxMembers: Int = DIFF_PARTITION_MAX_MEMBERS,
+    private val diffScanChunkSize: Int = REDIS_SCAN_CHUNK_SIZE,
 ) : CohortStorage {
     companion object {
         val log by logger()
     }
 
+    init {
+        // A non-positive partition max makes the partition-count arithmetic skip the diff loop
+        // entirely (publishing a version with zero membership updates); a non-positive chunk
+        // size is rejected by SSCAN. Fail at startup instead.
+        require(diffPartitionMaxMembers > 0) { "diffPartitionMaxMembers must be > 0, got $diffPartitionMaxMembers" }
+        require(diffScanChunkSize > 0) { "diffScanChunkSize must be > 0, got $diffScanChunkSize" }
+    }
+
     // Track inflight blob loads to avoid duplicate reads
     private val inflightBlobLoads = ConcurrentHashMap<String, CompletableDeferred<ByteArray?>>()
+
+    // TTLs the loading locks were acquired with, so long-running diffs can renew them
+    private val loadingLockTtls = ConcurrentHashMap<String, Long>()
 
     /**
      * Stream a Redis Set via SSCAN and pipeline membership updates in sub-batches.
@@ -272,6 +315,304 @@ internal class RedisCohortStorage(
             if (updates.isNotEmpty()) {
                 pipeline(updates, pipelineBatchSize)
             }
+        }
+    }
+
+    /**
+     * Compute and apply the added/removed membership updates between the existing and new cohort
+     * member sets without issuing any O(cohort size) Redis command.
+     *
+     * Opt-in alternative to [applySdiffstoreDiff] (the default): a SDIFFSTORE over the full
+     * old/new member sets executes as a single blocking command on one (single-threaded) shard —
+     * multi-second for multi-million member cohorts — stalling every concurrent command on that
+     * shard for its whole duration, replicas included since they re-execute the replicated
+     * command. Here both sets are instead streamed via SSCAN in [diffScanChunkSize] chunks and
+     * diffed client-side, so the largest single Redis command issued is one SSCAN page regardless
+     * of cohort size.
+     *
+     * To bound proxy memory, members are hash-partitioned into ceil(size / [diffPartitionMaxMembers])
+     * partitions and diffed one partition at a time: at most one partition of the existing set is
+     * held in memory at once, at the cost of one extra SSCAN pass over both sets per additional
+     * partition.
+     *
+     * Both keys are immutable at this point (the new set is fully written before [CohortIngestionWriter.complete],
+     * the existing set is the previously published version), but they are scanned from the primary
+     * connection to avoid misclassifying members due to replica lag on the just-written new set.
+     *
+     * A missed member is not a transient error here: one skipped by the existing-set scan becomes a
+     * false addition, and one skipped by the new-set scan becomes a false removal of an unchanged
+     * user — neither is ever repaired by a later diff. SSCAN can silently skip members when the
+     * cursor is invalidated mid-scan (cluster failover or slot migration), so each scan cross-checks
+     * the raw returned count against SCARD and aborts the refresh (to be retried) on a shortfall.
+     * The loading lock is renewed every [LOCK_RENEWAL_SCAN_PAGES] pages so that a diff outlasting
+     * the lock TTL does not let a second instance start a concurrent load; if renewal fails the
+     * diff aborts rather than run unlocked.
+     */
+    private suspend fun applyMembershipDiff(
+        existingCohortKey: RedisKey,
+        newCohortKey: RedisKey,
+        description: CohortDescription,
+        existingSize: Int,
+    ) {
+        val existingCard = redis.scard(existingCohortKey)
+        val newCard = redis.scard(newCohortKey)
+        val cohortIdSet = setOf(description.id)
+        if (existingCard == 0L) {
+            applyAllAdditions(newCohortKey, description, existingSize, newCard, cohortIdSet)
+            return
+        }
+        // Partition count is derived from the SCARD cardinalities, not the description-reported
+        // sizes: a crashed ingest can leave a version key holding more members than its published
+        // size, and an understated partition count would hold more than [diffPartitionMaxMembers]
+        // in memory at once — the bound this partitioning exists to enforce.
+        val partitions = ((maxOf(existingCard, newCard, 1L) - 1L) / diffPartitionMaxMembers).toInt() + 1
+        var addedCount = 0L
+        var removedCount = 0L
+        var existingDistinct = 0L
+        var scanPages = 0
+        for (partition in 0 until partitions) {
+            renewLoadingLock(description.id)
+            val expectedPartitionMembers = (existingCard / partitions).toInt() + 1
+            val existingPartition = HashSet<String>((expectedPartitionMembers / 0.75f).toInt() + 1)
+            var existingScanned = 0L
+            redis.sscanChunked(existingCohortKey, diffScanChunkSize) { chunk ->
+                existingScanned += chunk.size
+                if (++scanPages % LOCK_RENEWAL_SCAN_PAGES == 0) renewLoadingLock(description.id)
+                for (member in chunk) {
+                    if (partitions == 1 || partitionOf(member, partitions) == partition) {
+                        existingPartition.add(member)
+                    }
+                }
+            }
+            checkScanComplete(description.id, existingCohortKey, existingScanned, existingCard)
+            existingDistinct += existingPartition.size
+            val added = mutableListOf<String>()
+            var newScanned = 0L
+            redis.sscanChunked(newCohortKey, diffScanChunkSize) { chunk ->
+                newScanned += chunk.size
+                if (++scanPages % LOCK_RENEWAL_SCAN_PAGES == 0) renewLoadingLock(description.id)
+                for (member in chunk) {
+                    if (partitions > 1 && partitionOf(member, partitions) != partition) {
+                        continue
+                    }
+                    // Members present in both versions are drained from the existing partition
+                    // here; whatever remains after the scan is exactly this partition's removals.
+                    if (!existingPartition.remove(member)) {
+                        added.add(member)
+                        if (added.size >= diffScanChunkSize) {
+                            addedCount +=
+                                flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                                    redis.saddPipeline(updates, batchSize)
+                                }
+                        }
+                    }
+                }
+            }
+            checkScanComplete(description.id, newCohortKey, newScanned, newCard)
+            addedCount +=
+                flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                    redis.saddPipeline(updates, batchSize)
+                }
+            val removed = mutableListOf<String>()
+            for (member in existingPartition) {
+                removed.add(member)
+                if (removed.size >= diffScanChunkSize) {
+                    removedCount +=
+                        flushMembershipUpdates(removed, description.groupType, cohortIdSet) { updates, batchSize ->
+                            redis.sremPipeline(updates, batchSize)
+                        }
+                    if (++scanPages % LOCK_RENEWAL_SCAN_PAGES == 0) renewLoadingLock(description.id)
+                }
+            }
+            removedCount +=
+                flushMembershipUpdates(removed, description.groupType, cohortIdSet) { updates, batchSize ->
+                    redis.sremPipeline(updates, batchSize)
+                }
+        }
+        // Duplicates in an SSCAN pass can mask skipped members from the raw-count check above.
+        // Each existing member hashes to exactly one partition, so the distinct members collected
+        // across all passes must equal the cardinality; a shortfall means a member was skipped and
+        // would have been misclassified.
+        checkScanComplete(description.id, existingCohortKey, existingDistinct, existingCard)
+        log.info(
+            "cohort={} diff: addedCount={}, removedCount={}",
+            description.id,
+            addedCount,
+            removedCount,
+        )
+    }
+
+    /**
+     * Degraded-mode update for when the previous version's members key is gone even though its
+     * description is still published. SDIFFSTORE semantics for this state were "every new member
+     * is an addition, nothing is removed" — match that rather than failing the refresh forever,
+     * but loudly: members dropped between the two versions keep a stale membership until a later
+     * update removes them.
+     */
+    private suspend fun applyAllAdditions(
+        newCohortKey: RedisKey,
+        description: CohortDescription,
+        existingSize: Int,
+        newCard: Long,
+        cohortIdSet: Set<String>,
+    ) {
+        if (existingSize > 0) {
+            log.error(
+                "cohort={} existing members key missing at diff time (expected size {}); " +
+                    "applying all new members as additions with no removals",
+                description.id,
+                existingSize,
+            )
+        }
+        renewLoadingLock(description.id)
+        val added = mutableListOf<String>()
+        var addedCount = 0L
+        var newScanned = 0L
+        var scanPages = 0
+        redis.sscanChunked(newCohortKey, diffScanChunkSize) { chunk ->
+            newScanned += chunk.size
+            if (++scanPages % LOCK_RENEWAL_SCAN_PAGES == 0) renewLoadingLock(description.id)
+            for (member in chunk) {
+                added.add(member)
+                if (added.size >= diffScanChunkSize) {
+                    addedCount +=
+                        flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                            redis.saddPipeline(updates, batchSize)
+                        }
+                }
+            }
+        }
+        checkScanComplete(description.id, newCohortKey, newScanned, newCard)
+        addedCount +=
+            flushMembershipUpdates(added, description.groupType, cohortIdSet) { updates, batchSize ->
+                redis.saddPipeline(updates, batchSize)
+            }
+        log.info(
+            "cohort={} diff: addedCount={}, removedCount={}",
+            description.id,
+            addedCount,
+            0L,
+        )
+    }
+
+    /**
+     * SSCAN returns every member of an unmodified set at least once, so the raw returned count
+     * (duplicates included) must be >= the set's cardinality. A shortfall means the scan was
+     * silently truncated (e.g. the cursor was invalidated by a cluster failover or slot
+     * migration mid-scan); diffing from a truncated scan would corrupt per-user memberships.
+     */
+    private fun checkScanComplete(
+        cohortId: String,
+        key: RedisKey,
+        scanned: Long,
+        cardinality: Long,
+    ) {
+        check(scanned >= cardinality) {
+            "cohort=$cohortId SSCAN of ${key.value} returned $scanned members but SCARD reported " +
+                "$cardinality; aborting diff to retry (scan was silently truncated)"
+        }
+    }
+
+    private suspend fun renewLoadingLock(cohortId: String) {
+        // Only renew when this instance acquired the lock (tests call complete() directly)
+        val ttlSeconds = loadingLockTtls[cohortId] ?: return
+        val lockKey = RedisKey.CohortLoadingLock(prefix, projectId, cohortId)
+        // Fail closed: continuing without the lock lets a second instance run a concurrent
+        // diff of the same cohort, interleaving membership writes. Aborting leaves the
+        // description unpublished and the refresh retries next sync cycle.
+        check(redis.renewLock(lockKey, ttlSeconds)) {
+            "cohort=$cohortId loading-lock renewal failed (expired or taken over mid-diff); " +
+                "aborting refresh to avoid interleaving with a concurrent load"
+        }
+    }
+
+    private suspend fun flushMembershipUpdates(
+        members: MutableList<String>,
+        groupType: String,
+        cohortIdSet: Set<String>,
+        pipeline: suspend (updates: List<Pair<RedisKey, Set<String>>>, batchSize: Int) -> Unit,
+    ): Long {
+        if (members.isEmpty()) return 0L
+        val updates =
+            members.map { userId ->
+                RedisKey.UserCohortMemberships(prefix, projectId, groupType, userId) to cohortIdSet
+            }
+        pipeline(updates, pipelineBatchSize)
+        val flushed = members.size.toLong()
+        members.clear()
+        return flushed
+    }
+
+    private fun partitionOf(
+        member: String,
+        partitions: Int,
+    ): Int {
+        val hash = member.hashCode() % partitions
+        return if (hash < 0) hash + partitions else hash
+    }
+
+    /**
+     * Compute and apply the added/removed membership updates with two server-side SDIFFSTORE
+     * commands into temporary keys. Atomic and delta-sized on the apply side, but a set
+     * difference over multi-million member sets blocks its (single-threaded) shard for the
+     * whole computation and can exceed the Redis command timeout; enable the streamed
+     * client-side diff for cohorts at that scale.
+     */
+    private suspend fun applySdiffstoreDiff(
+        existingCohortKey: RedisKey,
+        newCohortKey: RedisKey,
+        description: CohortDescription,
+    ) {
+        // Create temporary keys for differences - server-side operations
+        val addedKey =
+            RedisKey.CohortTemporary(
+                prefix,
+                projectId,
+                description.id,
+                "added_${System.currentTimeMillis()}",
+            )
+        val removedKey =
+            RedisKey.CohortTemporary(
+                prefix,
+                projectId,
+                description.id,
+                "removed_${System.currentTimeMillis()}",
+            )
+        try {
+            // Server-side set operations - no memory transfer to client!
+            // Backstop TTLs are armed immediately after each SDIFFSTORE (not after both):
+            // the second SDIFFSTORE is itself a multi-second blocking command on large
+            // cohorts, so addedKey would otherwise sit unprotected through the likeliest
+            // crash window. If this process dies before the DELs below run, the temp keys
+            // self-clean instead of persisting forever.
+            val addedCount = redis.sdiffstore(addedKey, newCohortKey, existingCohortKey)
+            redis.expire(addedKey, PENDING_VERSION_TTL)
+            val removedCount = redis.sdiffstore(removedKey, existingCohortKey, newCohortKey)
+            redis.expire(removedKey, PENDING_VERSION_TTL)
+            log.info(
+                "cohort={} diff: addedCount={}, removedCount={}",
+                description.id,
+                addedCount,
+                removedCount,
+            )
+
+            // Process added users in streamed chunks
+            if (addedCount > 0) {
+                processMembershipUpdates(addedKey, description.groupType, description.id) { updates, batchSize ->
+                    redis.saddPipeline(updates, batchSize)
+                }
+            }
+
+            // Process removed users in streamed chunks
+            if (removedCount > 0) {
+                processMembershipUpdates(removedKey, description.groupType, description.id) { updates, batchSize ->
+                    redis.sremPipeline(updates, batchSize)
+                }
+            }
+        } finally {
+            // Clean up temporary keys
+            redis.del(addedKey)
+            redis.del(removedKey)
         }
     }
 
@@ -383,58 +724,10 @@ internal class RedisCohortStorage(
                                 prev.lastModified,
                             )
 
-                        // Create temporary keys for differences - server-side operations
-                        val addedKey =
-                            RedisKey.CohortTemporary(
-                                prefix,
-                                projectId,
-                                description.id,
-                                "added_${System.currentTimeMillis()}",
-                            )
-                        val removedKey =
-                            RedisKey.CohortTemporary(
-                                prefix,
-                                projectId,
-                                description.id,
-                                "removed_${System.currentTimeMillis()}",
-                            )
-
-                        try {
-                            // Server-side set operations - no memory transfer to client!
-                            // Backstop TTLs are armed immediately after each SDIFFSTORE (not
-                            // after both): the second SDIFFSTORE is itself a multi-second
-                            // blocking command on large cohorts, so addedKey would otherwise
-                            // sit unprotected through the likeliest crash window. If this
-                            // process dies before the DELs below run, the temp keys
-                            // self-clean instead of persisting forever.
-                            val addedCount = redis.sdiffstore(addedKey, newCohortKey, existingCohortKey)
-                            redis.expire(addedKey, PENDING_VERSION_TTL)
-                            val removedCount = redis.sdiffstore(removedKey, existingCohortKey, newCohortKey)
-                            redis.expire(removedKey, PENDING_VERSION_TTL)
-                            log.info(
-                                "cohort={} diff: addedCount={}, removedCount={}",
-                                description.id,
-                                addedCount,
-                                removedCount,
-                            )
-
-                            // Process added users in streamed chunks
-                            if (addedCount > 0) {
-                                processMembershipUpdates(addedKey, description.groupType, description.id) { updates, batchSize ->
-                                    redis.saddPipeline(updates, batchSize)
-                                }
-                            }
-
-                            // Process removed users in streamed chunks
-                            if (removedCount > 0) {
-                                processMembershipUpdates(removedKey, description.groupType, description.id) { updates, batchSize ->
-                                    redis.sremPipeline(updates, batchSize)
-                                }
-                            }
-                        } finally {
-                            // Clean up temporary keys
-                            redis.del(addedKey)
-                            redis.del(removedKey)
+                        if (streamedDiffEnabled) {
+                            applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size)
+                        } else {
+                            applySdiffstoreDiff(existingCohortKey, newCohortKey, description)
                         }
                     } else {
                         // No previous cohort: all members are additions
@@ -452,16 +745,19 @@ internal class RedisCohortStorage(
                 val b64 = Base64.getEncoder().encodeToString(gzBytes)
                 redis.set(blobKey, b64)
 
-                // Promote this version: clear the pending TTL so the now-current member set
-                // does not expire, then publish the cohort description (only after successful
-                // blob store).
-                redis.persist(newCohortKey)
+                // Promote this version: publish the cohort description (only after successful
+                // blob store), then clear the pending TTL so the now-current member set does
+                // not expire. Publish-then-persist means a refresh that dies anywhere before
+                // the publish always leaves a set that self-cleans via its pending TTL; the
+                // one-command window where the published set still carries the TTL is repaired
+                // by [ensureCurrentVersionPersisted] on the next sync cycle.
                 val updatedDescription = description.copy(size = finalSize)
                 val jsonEncodedDescription = json.encodeToString(updatedDescription)
                 redis.hset(
                     RedisKey.CohortDescriptions(prefix, projectId),
                     mapOf(description.id to jsonEncodedDescription),
                 )
+                redis.persist(newCohortKey)
 
                 // Retire the previous version only after successful promotion. A failed
                 // refresh must leave the previous (still published) version untouched —
@@ -528,10 +824,27 @@ internal class RedisCohortStorage(
     ): Boolean {
         val lockKey = RedisKey.CohortLoadingLock(prefix, projectId, cohortId)
         log.debug("Acquiring lock for cohort $cohortId")
-        return redis.acquireLock(lockKey, lockTimeoutSeconds.toLong())
+        val acquired = redis.acquireLock(lockKey, lockTimeoutSeconds.toLong())
+        if (acquired) {
+            loadingLockTtls[cohortId] = lockTimeoutSeconds.toLong()
+        }
+        return acquired
+    }
+
+    override suspend fun ensureCurrentVersionPersisted(description: CohortDescription) {
+        redis.persist(
+            RedisKey.CohortMembers(
+                prefix,
+                projectId,
+                description.id,
+                description.groupType,
+                description.lastModified,
+            ),
+        )
     }
 
     override suspend fun releaseCohortLoadingLock(cohortId: String) {
+        loadingLockTtls.remove(cohortId)
         val lockKey = RedisKey.CohortLoadingLock(prefix, projectId, cohortId)
         val released = redis.releaseLock(lockKey)
         if (!released) {
