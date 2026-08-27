@@ -19,6 +19,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.ApplicationRequest
+import io.ktor.server.request.receiveText
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
@@ -26,7 +27,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.decodeBase64String
-import io.ktor.util.toByteArray
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.runBlocking
@@ -121,7 +121,7 @@ fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
     }
     install(
         createApplicationPlugin("shutdown") {
-            val plugin = ShutDownUrl("/shutdown") { 0 }
+            val plugin = ShutDownUrl("/shutdown", exitCode = { 0 })
             onCall { call ->
                 if (call.request.uri == plugin.url) {
                     evaluationProxy.shutdown()
@@ -314,8 +314,9 @@ private fun ApplicationRequest.getUserFromHeader(): Map<String, Any?> {
 /**
  * Get the user from the body. Used for SDK/REST POST requests.
  */
-private suspend fun ApplicationRequest.getUserFromBody(): Map<String, Any?> {
-    val userJson = this.receiveChannel().toByteArray().toString(Charsets.UTF_8)
+@VisibleForTesting
+internal suspend fun ApplicationRequest.getUserFromBody(): Map<String, Any?> {
+    val userJson = call.receiveText()
     return json.decodeFromString<JsonObject>(userJson).toAnyMap()
 }
 

@@ -1,10 +1,11 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm")
-    kotlin("plugin.serialization") version "2.0.0"
+    kotlin("plugin.serialization") version "2.2.21"
     id("com.vanniktech.maven.publish") version "0.34.0"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("org.jetbrains.dokka") version "1.9.20"
@@ -20,7 +21,11 @@ java {
 }
 
 tasks {
-    withType<KotlinCompile> { kotlinOptions { jvmTarget = "17" } }
+    withType<KotlinCompile> {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
 }
 
 // Defined in gradle.properties

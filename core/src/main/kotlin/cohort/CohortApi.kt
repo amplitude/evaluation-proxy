@@ -16,7 +16,6 @@ import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpStatusCode
-import io.ktor.util.toByteArray
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.serialization.Serializable
 import okio.buffer
