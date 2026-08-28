@@ -12,6 +12,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
 
       # SETUP & VALIDATION
@@ -78,11 +81,14 @@ jobs:
 
       # RELEASE DOCKER IMAGE
 
-      - name: Login to DockerHub
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc # v2
+      - name: Configure AWS credentials
+        uses: amplitude/actions/configure-aws-credentials@v0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          account: ops
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: amplitude/actions/amazon-ecr-login@v0
 
       - name: Get Build Date
         run: |
@@ -93,10 +99,10 @@ jobs:
         uses: docker/metadata-action@818d4b7b91585d195f67373fd9cb0332e31a7175 # v4
         with:
           tags: type=semver,pattern={{version}},value=v${{ github.event.inputs.version }}
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/evaluation-proxy
+          images: ${{ steps.login-ecr.outputs.registry }}/evaluation-proxy
 
       - name: Docker Build and Push
-        uses: docker/build-push-action@1104d471370f9806843c095c1db02b5a90c5f8b6 # v3
+        uses: amplitude/actions/build-push-action@v0
         with:
           context: .
           push: true
