@@ -3,6 +3,7 @@ package project
 import com.amplitude.project.DeploymentsResponse
 import com.amplitude.project.ProjectApiV1
 import com.amplitude.util.json
+import com.sun.net.httpserver.HttpServer
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpMethod
@@ -13,6 +14,7 @@ import kotlinx.serialization.encodeToString
 import org.junit.Test
 import test.deployment
 import test.toSerialDeployment
+import java.net.InetSocketAddress
 import kotlin.test.assertEquals
 
 class ProjectApiTest {
@@ -67,5 +69,29 @@ class ProjectApiTest {
             assertEquals(HttpMethod.Get, request.method)
             assertEquals("/api/1/deployments", request.url.encodedPath)
             assertEquals("Bearer $managementKey", request.headers["Authorization"])
+        }
+
+    @Test
+    fun `get deployments over okhttp engine with coroutines 1_11`(): Unit =
+        runBlocking {
+            val expected = listOf(deployment("okhttp"))
+            val responseBody =
+                json.encodeToString(
+                    DeploymentsResponse(expected.map { it.toSerialDeployment() }),
+                ).toByteArray()
+            val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+            server.createContext("/api/1/deployments") { exchange ->
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(200, responseBody.size.toLong())
+                exchange.responseBody.use { it.write(responseBody) }
+            }
+            server.start()
+
+            try {
+                val api = ProjectApiV1("http://127.0.0.1:${server.address.port}/", managementKey)
+                assertEquals(expected, api.getDeployments())
+            } finally {
+                server.stop(0)
+            }
         }
 }
