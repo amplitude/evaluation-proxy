@@ -105,6 +105,12 @@ internal class RedisConnection(
         }
     }
 
+    override suspend fun unlink(key: RedisKey) {
+        connection.run {
+            unlink(key.value)
+        }
+    }
+
     override suspend fun sadd(
         key: RedisKey,
         values: Set<String>,

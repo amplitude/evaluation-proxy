@@ -9,6 +9,16 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
@@ -29,5 +39,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Configure asynchronous Redis expiry
+        run: docker exec "${{ job.services.redis.id }}" redis-cli CONFIG SET lazyfree-lazy-expire yes
+
       - name: Test
+        env:
+          REDIS_TEST_URI: redis://localhost:6379
         run: ./gradlew test --info

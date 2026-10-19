@@ -19,6 +19,9 @@ internal interface Redis {
 
     suspend fun del(key: RedisKey)
 
+    /** Remove a key immediately and reclaim large values on Redis background threads. */
+    suspend fun unlink(key: RedisKey)
+
     suspend fun sadd(
         key: RedisKey,
         values: Set<String>,
