@@ -583,7 +583,7 @@ internal class RedisCohortStorage(
             // Backstop TTLs are armed immediately after each SDIFFSTORE (not after both):
             // the second SDIFFSTORE is itself a multi-second blocking command on large
             // cohorts, so addedKey would otherwise sit unprotected through the likeliest
-            // crash window. If this process dies before the DELs below run, the temp keys
+            // crash window. If this process dies before the UNLINKs below run, the temp keys
             // self-clean instead of persisting forever.
             val addedCount = redis.sdiffstore(addedKey, newCohortKey, existingCohortKey)
             redis.expire(addedKey, PENDING_VERSION_TTL)
@@ -610,9 +610,9 @@ internal class RedisCohortStorage(
                 }
             }
         } finally {
-            // Clean up temporary keys
-            redis.del(addedKey)
-            redis.del(removedKey)
+            // Large diffs can leave large temporary sets; free them off the Redis command thread.
+            redis.unlink(addedKey)
+            redis.unlink(removedKey)
         }
     }
 
@@ -659,7 +659,7 @@ internal class RedisCohortStorage(
 
     override suspend fun deleteCohort(description: CohortDescription) {
         val blobKey = RedisKey.CohortBlob(prefix, projectId, description.id, description.lastModified)
-        redis.del(blobKey)
+        redis.unlink(blobKey)
         cohortBlobCache.remove(description.id, description.lastModified)
         redis.hdel(RedisKey.CohortDescriptions(prefix, projectId), description.id)
         val cohortMembersKey =
@@ -673,7 +673,7 @@ internal class RedisCohortStorage(
         processMembershipUpdates(cohortMembersKey, description.groupType, description.id) { updates, batchSize ->
             redis.sremPipeline(updates, batchSize)
         }
-        redis.del(cohortMembersKey)
+        redis.unlink(cohortMembersKey)
     }
 
     override fun createWriter(description: CohortDescription): CohortIngestionWriter {
@@ -772,6 +772,8 @@ internal class RedisCohortStorage(
                             prev.lastModified,
                         )
                     val previousBlobKey = RedisKey.CohortBlob(prefix, projectId, description.id, prev.lastModified)
+                    // Keep the grace period for in-flight reads. Redis must be configured with
+                    // lazyfree-lazy-expire=yes to free large expired sets off the command thread.
                     redis.expire(previousCohortKey, ttl)
                     redis.expire(previousBlobKey, ttl)
                 }

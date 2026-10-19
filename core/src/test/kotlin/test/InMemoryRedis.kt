@@ -41,6 +41,10 @@ internal class InMemoryRedis : Redis {
         expirations.remove(key.value)
     }
 
+    override suspend fun unlink(key: RedisKey) {
+        del(key)
+    }
+
     override suspend fun sadd(
         key: RedisKey,
         values: Set<String>,

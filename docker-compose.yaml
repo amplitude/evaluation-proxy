@@ -10,3 +10,4 @@ services:
       - "./compose-config.yaml:/etc/evaluation-proxy-config.yaml"
   redis:
     image: "redis:alpine"
+    command: ["redis-server", "--lazyfree-lazy-expire", "yes"]
