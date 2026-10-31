@@ -31,6 +31,32 @@ configuration:
 
 The developer docs contain [additional information about configuration](https://docs.developers.amplitude.com/experiment/infra/evaluation-proxy#configuration).
 
+### EU data residency
+
+Set `serverZone: EU` so that **all** outbound traffic (flag configs, cohorts, the Management API and assignment/exposure events) goes to Amplitude's EU data center. Setting only `serverUrl` and `cohortServerUrl` is not sufficient: the management and analytics endpoints would still default to US.
+
+```yaml
+configuration:
+  serverZone: "EU"
+```
+
+Individual endpoints can still be overridden with `serverUrl`, `cohortServerUrl`, `managementServerUrl` and `analyticsServerUrl` (or the environment variables `AMPLITUDE_SERVER_URL`, `AMPLITUDE_COHORT_SERVER_URL`, `AMPLITUDE_MANAGEMENT_SERVER_URL`, `AMPLITUDE_ANALYTICS_SERVER_URL`). When configuring via environment variables, `AMPLITUDE_SERVER_ZONE=EU` sets all four defaults.
+
+### Remote evaluation mode flags
+
+The proxy performs local evaluation only. Flags configured for **remote** evaluation mode are returned by Amplitude without targeting rules, so the proxy cannot evaluate them. They are omitted from `/sdk/vardata`, `/sdk/v2/vardata` and `/v1/vardata` responses (a warning is logged once per flag and the `amplitude_proxy_remote_evaluation_flag_skipped_total` metric is incremented) rather than being answered with their default variant. Evaluate such flags against Amplitude's remote evaluation endpoints directly.
+
+### Tracking headers
+
+* `X-Amp-Exp-Track: no-track` disables assignment event tracking for the evaluation (default: tracked).
+* `X-Amp-Exp-Exposure-Track: track` enables exposure event tracking for the evaluation (default: not tracked).
+
+### Security notes
+
+* The container runs as a non-root user and does not enable remote JMX. JMX can be enabled explicitly via `JAVA_OPTS`; if you do, require authentication and restrict network access to the JMX port.
+* There is no HTTP shutdown endpoint. The service shuts down gracefully on `SIGTERM`.
+* Credentials (deployment keys, API keys, secret keys, management keys and Redis passwords) are redacted from logs.
+
 ## Deployment
 
 The evaluation proxy is stateless, and should be deployed with multiple instances behind a load balancer for high availability and scalability.

@@ -5,6 +5,7 @@ import com.amplitude.util.intEnv
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.longEnv
+import com.amplitude.util.redactedUri
 import com.amplitude.util.stringEnv
 import com.amplitude.util.yaml
 import kotlinx.serialization.Serializable
@@ -98,14 +99,18 @@ data class Configuration(
     val metrics: MetricsConfiguration = MetricsConfiguration(),
 ) {
     companion object {
-        fun fromEnv() =
-            Configuration(
+        fun fromEnv(): Configuration {
+            // Explicit URL variables override the zone; otherwise every URL is
+            // derived from the zone so that AMPLITUDE_SERVER_ZONE=EU alone yields
+            // an all-EU configuration.
+            val serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!
+            return Configuration(
                 port = intEnv(EnvKey.PORT, Default.PORT)!!,
-                serverZone = stringEnv(EnvKey.SERVER_ZONE, Default.SERVER_ZONE)!!,
-                serverUrl = stringEnv(EnvKey.SERVER_URL, Default.US_SERVER_URL)!!,
-                cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL, Default.US_COHORT_SERVER_URL)!!,
-                managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL, Default.US_MANAGEMENT_SERVER_URL)!!,
-                analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL, Default.US_ANALYTICS_SERVER_URL)!!,
+                serverZone = serverZone,
+                serverUrl = stringEnv(EnvKey.SERVER_URL) ?: getServerUrl(serverZone),
+                cohortServerUrl = stringEnv(EnvKey.COHORT_SERVER_URL) ?: getCohortServerUrl(serverZone),
+                managementServerUrl = stringEnv(EnvKey.MANAGEMENT_SERVER_URL) ?: getManagementServerUrl(serverZone),
+                analyticsServerUrl = stringEnv(EnvKey.ANALYTICS_SERVER_URL) ?: getAnalyticsServerUrl(serverZone),
                 deploymentSyncIntervalMillis =
                     longEnv(
                         EnvKey.DEPLOYMENT_SYNC_INTERVAL_MILLIS,
@@ -126,6 +131,7 @@ data class Configuration(
                 exposure = ExposureConfiguration.fromEnv(),
                 redis = RedisConfiguration.fromEnv(),
             )
+        }
     }
 }
 
@@ -230,6 +236,17 @@ data class RedisConfiguration(
     val cohortDiffPartitionMaxMembers: Int = Default.COHORT_DIFF_PARTITION_MAX_MEMBERS,
     val cohortDiffScanChunkSize: Int = Default.COHORT_DIFF_SCAN_CHUNK_SIZE,
 ) {
+    /**
+     * Redacts credentials embedded in the Redis URIs so the configuration can be
+     * logged safely at startup.
+     */
+    override fun toString(): String =
+        "RedisConfiguration(uri=${uri.redactedUri()}, readOnlyUri=${readOnlyUri.redactedUri()}, " +
+            "useCluster=$useCluster, readFrom=$readFrom, prefix=$prefix, scanLimit=$scanLimit, " +
+            "connectionTimeoutMillis=$connectionTimeoutMillis, commandTimeoutMillis=$commandTimeoutMillis, " +
+            "pipelineBatchSize=$pipelineBatchSize, streamedCohortDiffEnabled=$streamedCohortDiffEnabled, " +
+            "cohortDiffPartitionMaxMembers=$cohortDiffPartitionMaxMembers, cohortDiffScanChunkSize=$cohortDiffScanChunkSize)"
+
     companion object {
         fun fromEnv(): RedisConfiguration? {
             val redisUri = stringEnv(EnvKey.REDIS_URI, Default.REDIS_URI)

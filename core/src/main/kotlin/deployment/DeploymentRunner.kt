@@ -4,6 +4,7 @@ import com.amplitude.Configuration
 import com.amplitude.cohort.CohortLoader
 import com.amplitude.util.getAllCohortIds
 import com.amplitude.util.logger
+import com.amplitude.util.redacted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
@@ -24,8 +25,10 @@ internal class DeploymentRunner(
     private val supervisor = SupervisorJob()
     private val scope = CoroutineScope(supervisor)
 
+    private val redactedKey = deploymentKey.redacted()
+
     suspend fun start() {
-        log.trace("start: - deploymentKey=$deploymentKey")
+        log.trace("start: - deploymentKey=$redactedKey")
         val job =
             scope.launch {
                 try {
@@ -33,7 +36,7 @@ internal class DeploymentRunner(
                 } catch (t: Throwable) {
                     // Catch failure and continue to run pollers. Assume deployment
                     // load will eventually succeed.
-                    log.error("Load failed for deployment $deploymentKey", t)
+                    log.error("Load failed for deployment $redactedKey", t)
                 }
             }
         // Periodic flag config loader
@@ -43,7 +46,7 @@ internal class DeploymentRunner(
                 try {
                     deploymentLoader.loadDeployment(deploymentKey)
                 } catch (t: Throwable) {
-                    log.error("Periodic deployment load failed for deployment $deploymentKey", t)
+                    log.error("Periodic deployment load failed for deployment $redactedKey", t)
                 }
             }
         }
@@ -55,7 +58,7 @@ internal class DeploymentRunner(
                     val cohortIds = deploymentStorage.getAllFlags(deploymentKey).values.getAllCohortIds()
                     cohortLoader.loadCohorts(cohortIds)
                 } catch (t: Throwable) {
-                    log.error("Periodic cohort load failed for deployment $deploymentKey", t)
+                    log.error("Periodic cohort load failed for deployment $redactedKey", t)
                 }
             }
         }
@@ -63,7 +66,7 @@ internal class DeploymentRunner(
     }
 
     suspend fun stop() {
-        log.debug("stop: - deploymentKey=$deploymentKey")
+        log.debug("stop: - deploymentKey=$redactedKey")
         supervisor.cancelAndJoin()
     }
 }

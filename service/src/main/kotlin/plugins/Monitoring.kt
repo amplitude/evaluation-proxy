@@ -31,6 +31,7 @@ import com.amplitude.Metric
 import com.amplitude.MetricsHandler
 import com.amplitude.RedisCommand
 import com.amplitude.RedisCommandFailure
+import com.amplitude.RemoteEvaluationFlagSkipped
 import com.amplitude.util.logger
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -77,6 +78,9 @@ class PrometheusMetrics(
             }
             is EvaluationFailure -> {
                 prometheus.counter("amplitude_proxy_evaluation_failure_total").increment()
+            }
+            is RemoteEvaluationFlagSkipped -> {
+                prometheus.counter("amplitude_proxy_remote_evaluation_flag_skipped_total").increment()
             }
             is AssignmentEvent -> {
                 prometheus.counter("amplitude_proxy_assignment_total").increment()

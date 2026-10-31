@@ -2,6 +2,8 @@ package com.amplitude.project
 
 import com.amplitude.Configuration
 import com.amplitude.EvaluationProxyResponse
+import com.amplitude.Metrics
+import com.amplitude.RemoteEvaluationFlagSkipped
 import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.CohortApiV1
@@ -16,6 +18,7 @@ import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.experiment.evaluation.topologicalSort
 import com.amplitude.exposure.Exposure
 import com.amplitude.exposure.ExposureTracker
+import com.amplitude.util.isRemoteEvaluationMode
 import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.toEvaluationContext
@@ -23,6 +26,7 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
+import java.util.concurrent.ConcurrentHashMap
 
 internal class ProjectProxy(
     private val project: Project,
@@ -37,6 +41,9 @@ internal class ProjectProxy(
     }
 
     private val engine = EvaluationEngineImpl()
+
+    // Remote evaluation mode flags we have already warned about, so the warning is logged once per flag.
+    private val warnedRemoteFlagKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val projectApi = ProjectApiV1(configuration.managementServerUrl, project.managementKey)
     private val deploymentApi = DeploymentApiV2(configuration.serverUrl)
@@ -124,11 +131,12 @@ internal class ProjectProxy(
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
         tracksExposure: Boolean = false,
+        tracksAssignment: Boolean = true,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
-        val result = evaluateInternal(deploymentKey, user, flagKeys, tracksExposure)
+        val result = evaluateInternal(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment)
         return EvaluationProxyResponse(HttpStatusCode.OK, json.encodeToString(result))
     }
 
@@ -137,12 +145,13 @@ internal class ProjectProxy(
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
         tracksExposure: Boolean = false,
+        tracksAssignment: Boolean = true,
     ): EvaluationProxyResponse {
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
         val result =
-            evaluateInternal(deploymentKey, user, flagKeys, tracksExposure).filter { entry ->
+            evaluateInternal(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment).filter { entry ->
                 val default = entry.value.metadata?.get("default") as? Boolean ?: false
                 val deployed = entry.value.metadata?.get("deployed") as? Boolean ?: true
                 (!default && deployed)
@@ -155,6 +164,7 @@ internal class ProjectProxy(
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
         tracksExposure: Boolean = false,
+        tracksAssignment: Boolean = true,
     ): Map<String, EvaluationVariant> {
         // Get flag configs for the deployment from storage and topo sort.
         val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
@@ -164,6 +174,22 @@ internal class ProjectProxy(
         val flags = topologicalSort(storageFlags, flagKeys ?: setOf())
         if (flags.isEmpty()) {
             return mapOf()
+        }
+        // Flags in remote evaluation mode cannot be evaluated by the proxy: the
+        // flag server only returns a default stub for them (no targeting rules).
+        // They are kept for dependency resolution but omitted from the result,
+        // rather than answering with the stub's default as if it were a decision.
+        val remoteFlagKeys = flags.filter { it.isRemoteEvaluationMode() }.map { it.key }.toSet()
+        for (remoteFlagKey in remoteFlagKeys) {
+            Metrics.track(RemoteEvaluationFlagSkipped)
+            if (warnedRemoteFlagKeys.add(remoteFlagKey)) {
+                log.warn(
+                    "Flag {} is configured for remote evaluation and cannot be evaluated by the " +
+                        "evaluation proxy; it is omitted from local evaluation results. projectId={}",
+                    remoteFlagKey,
+                    project.id,
+                )
+            }
         }
         // Enrich user with cohort IDs and build the evaluation context
         val userId = user?.get("user_id") as? String
@@ -191,11 +217,16 @@ internal class ProjectProxy(
         val evaluationContext = enrichedUser.toEvaluationContext()
         // Evaluate results
         log.debug("evaluate - context={}", evaluationContext)
-        val result = engine.evaluate(evaluationContext, flags)
-        if (enrichedUser.isNotEmpty()) {
+        val result =
+            engine.evaluate(evaluationContext, flags).let { evaluated ->
+                if (remoteFlagKeys.isEmpty()) evaluated else evaluated.filterKeys { it !in remoteFlagKeys }
+            }
+        if (enrichedUser.isNotEmpty() && result.isNotEmpty()) {
             coroutineScope {
-                launch {
-                    assignmentTracker.track(Assignment(evaluationContext, result))
+                if (tracksAssignment) {
+                    launch {
+                        assignmentTracker.track(Assignment(evaluationContext, result))
+                    }
                 }
                 if (tracksExposure) {
                     launch {
