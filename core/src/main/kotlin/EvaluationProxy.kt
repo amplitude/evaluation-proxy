@@ -115,34 +115,10 @@ class EvaluationProxy internal constructor(
          * configuration, and create the project proxy.
          */
         log.info("Setting up ${projectConfigurations.size} project(s)")
-        // True if any configured project could not be fully resolved against the
-        // Management API (request failed or returned no deployments). In that case
-        // the storage cleanup below is skipped: we cannot tell a removed project
-        // from one we simply failed to load, and must not delete shared data.
-        var skipStorageCleanup = false
         for (projectConfiguration in projectConfigurations) {
             val projectApi = createProjectApi(projectConfiguration.managementKey)
-            val deployments =
-                try {
-                    projectApi.getDeployments()
-                } catch (t: Throwable) {
-                    // Do not take the whole process down because one project's
-                    // Management API call failed at startup. Other projects still
-                    // start; this one will be picked up on the next restart.
-                    log.error(
-                        "Failed to fetch deployments for project with api key ${projectConfiguration.apiKey.redacted()}; " +
-                            "skipping project.",
-                        t,
-                    )
-                    skipStorageCleanup = true
-                    continue
-                }
+            val deployments = projectApi.getDeployments()
             if (deployments.isEmpty()) {
-                log.warn(
-                    "No deployments returned for project with api key ${projectConfiguration.apiKey.redacted()}; " +
-                        "skipping project.",
-                )
-                skipStorageCleanup = true
                 continue
             }
             val projectId = deployments.first().projectId
@@ -177,10 +153,7 @@ class EvaluationProxy internal constructor(
             projectStorage.putProject(projectId)
         }
         // Remove all non-configured projects and associated data
-        val storageProjectIds = if (skipStorageCleanup) emptySet() else projectStorage.getProjects()
-        if (skipStorageCleanup) {
-            log.warn("Skipping removal of non-configured projects from storage because not all projects were loaded.")
-        }
+        val storageProjectIds = projectStorage.getProjects()
         for (projectId in storageProjectIds - projectIds) {
             log.info("Removing project $projectId")
             val deploymentStorage = createDeploymentStorage(projectId)
