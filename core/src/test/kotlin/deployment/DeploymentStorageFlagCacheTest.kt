@@ -2,8 +2,11 @@ package deployment
 
 import com.amplitude.deployment.RedisDeploymentStorage
 import com.amplitude.util.redis.RedisKey
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.spyk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import test.InMemoryRedis
 import test.flag
@@ -94,6 +97,52 @@ class DeploymentStorageFlagCacheTest {
 
             repeat(3) { storage.getAllFlags(deploymentKey) }
             coVerify(exactly = 4) { redis.hgetall(flagsKey) }
+        }
+
+    @Test
+    fun `refill that started before a local write does not cache stale flags`(): Unit =
+        runBlocking {
+            val redis = spyk(InMemoryRedis())
+            val clock = FakeClock()
+            val storage = storage(redis, 5000, clock)
+            storage.putFlag(deploymentKey, flag("a"))
+
+            // Hold the first refill after it has read the pre-write snapshot.
+            val readDone = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            var held = false
+            coEvery { redis.hgetall(flagsKey) } coAnswers {
+                val snapshot = callOriginal()
+                if (!held) {
+                    held = true
+                    readDone.complete(Unit)
+                    release.await()
+                }
+                snapshot
+            }
+
+            val inFlight = async { storage.getAllFlagsCached(deploymentKey) }
+            readDone.await()
+            // Local write lands while the refill is still in flight.
+            storage.putFlag(deploymentKey, flag("b"))
+            release.complete(Unit)
+            assertEquals(setOf("a"), inFlight.await().keys)
+
+            // The stale snapshot must not have been cached: the next read sees the write
+            // without waiting for the TTL.
+            assertEquals(setOf("a", "b"), storage.getAllFlagsCached(deploymentKey).keys)
+        }
+
+    @Test
+    fun `refill reads the primary so replica lag is not cached`(): Unit =
+        runBlocking {
+            val primary = InMemoryRedis()
+            val laggingReplica = InMemoryRedis()
+            val clock = FakeClock()
+            val storage = RedisDeploymentStorage("amplitude", "12345", primary, laggingReplica, 5000) { clock.nanos }
+            storage.putFlag(deploymentKey, flag("a"))
+
+            assertEquals(setOf("a"), storage.getAllFlagsCached(deploymentKey).keys)
         }
 
     @Test

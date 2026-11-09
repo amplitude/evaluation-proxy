@@ -156,9 +156,17 @@ internal class RedisDeploymentStorage(
     )
 
     private val flagCache = ConcurrentHashMap<String, CachedFlags>()
+
+    // Bumped on every local write to a deployment's flags. A refill only stores its
+    // result if the generation is unchanged since the refill started, so a load that
+    // began before a write can't put pre-write flags back into the cache.
+    private val flagCacheGenerations = ConcurrentHashMap<String, Long>()
     private val flagCacheTtlNanos = TimeUnit.MILLISECONDS.toNanos(flagCacheTtlMillis)
 
     private fun invalidate(deploymentKey: String) {
+        // Bump before removing: a refill that checks the generation after this point
+        // discards its result; one that stored before it is removed here.
+        flagCacheGenerations.merge(deploymentKey, 1L, Long::plus)
         flagCache.remove(deploymentKey)
     }
 
@@ -201,6 +209,10 @@ internal class RedisDeploymentStorage(
      * Serve flags from memory for up to [flagCacheTtlMillis] to avoid an HGETALL and
      * a full JSON decode of every flag on every request. Local writes invalidate the
      * entry immediately; writes made by other instances become visible within the TTL.
+     *
+     * Refills read the primary rather than the read replica: with the cache in front,
+     * this is about one read per deployment per TTL, and it avoids caching a snapshot
+     * that lags a write this instance just made.
      */
     override suspend fun getAllFlagsCached(deploymentKey: String): Map<String, EvaluationFlag> {
         if (flagCacheTtlNanos <= 0) {
@@ -211,8 +223,13 @@ internal class RedisDeploymentStorage(
         if (cached != null && now - cached.loadedAtNanos < flagCacheTtlNanos) {
             return cached.flags
         }
-        val flags = getAllFlags(deploymentKey)
-        flagCache[deploymentKey] = CachedFlags(flags, now)
+        val generation = flagCacheGenerations[deploymentKey] ?: 0L
+        val flags =
+            redis.hgetall(RedisKey.FlagConfigs(prefix, projectId, deploymentKey))
+                ?.mapValues { json.decodeFromString<EvaluationFlag>(it.value) } ?: mapOf()
+        flagCache.compute(deploymentKey) { _, existing ->
+            if ((flagCacheGenerations[deploymentKey] ?: 0L) == generation) CachedFlags(flags, now) else existing
+        }
         return flags
     }
 
