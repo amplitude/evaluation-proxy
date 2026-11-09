@@ -709,31 +709,50 @@ internal class RedisCohortStorage(
             }
 
             override suspend fun complete(finalSize: Int) {
+                // addMembers() is never called for an empty cohort, so the previous
+                // description must be resolved here as well; otherwise an emptied cohort
+                // would be treated as brand new and no memberships would be removed.
+                if (existingDescription == null) {
+                    existingDescription = getCohortDescription(description.id)
+                }
                 val prev = existingDescription
+                if (prev != null && description.lastModified <= prev.lastModified) {
+                    // Same or older version than what is already published: nothing to do
+                    // (mirrors the guard in addMembers()).
+                    log.debug(
+                        "cohort={} complete: version {} is not newer than published {}, skipping",
+                        description.id,
+                        description.lastModified,
+                        prev.lastModified,
+                    )
+                    return
+                }
                 log.debug("cohort={} complete: finalSize={}", description.id, finalSize)
 
-                // Only process members if the cohort has any (avoid empty cohort operations)
-                if (finalSize > 0) {
-                    if (prev != null) {
-                        val existingCohortKey =
-                            RedisKey.CohortMembers(
-                                prefix,
-                                projectId,
-                                prev.id,
-                                prev.groupType,
-                                prev.lastModified,
-                            )
+                if (prev != null) {
+                    // Diff against the previous version. This must also run when the new
+                    // version is empty (finalSize == 0): an emptied cohort has to remove
+                    // every previous member's membership, otherwise former members keep
+                    // receiving the targeted variants indefinitely. Both diff paths treat a
+                    // missing/empty new set as "remove everything".
+                    val existingCohortKey =
+                        RedisKey.CohortMembers(
+                            prefix,
+                            projectId,
+                            prev.id,
+                            prev.groupType,
+                            prev.lastModified,
+                        )
 
-                        if (streamedDiffEnabled) {
-                            applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size)
-                        } else {
-                            applySdiffstoreDiff(existingCohortKey, newCohortKey, description)
-                        }
+                    if (streamedDiffEnabled) {
+                        applyMembershipDiff(existingCohortKey, newCohortKey, description, prev.size)
                     } else {
-                        // No previous cohort: all members are additions
-                        processMembershipUpdates(newCohortKey, description.groupType, description.id) { updates, batchSize ->
-                            redis.saddPipeline(updates, batchSize)
-                        }
+                        applySdiffstoreDiff(existingCohortKey, newCohortKey, description)
+                    }
+                } else if (finalSize > 0) {
+                    // No previous cohort: all members are additions
+                    processMembershipUpdates(newCohortKey, description.groupType, description.id) { updates, batchSize ->
+                        redis.saddPipeline(updates, batchSize)
                     }
                 }
 
@@ -762,7 +781,7 @@ internal class RedisCohortStorage(
                 // Retire the previous version only after successful promotion. A failed
                 // refresh must leave the previous (still published) version untouched —
                 // expiring it in a finally block would break reads of the live cohort.
-                if (finalSize > 0 && prev != null && prev.lastModified != description.lastModified) {
+                if (prev != null && prev.lastModified != description.lastModified) {
                     val previousCohortKey =
                         RedisKey.CohortMembers(
                             prefix,

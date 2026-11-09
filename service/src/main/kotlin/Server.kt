@@ -12,15 +12,12 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
-import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
-import io.ktor.server.engine.ShutDownUrl
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.receiveText
-import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.get
@@ -69,6 +66,7 @@ fun main() {
             log.info("Proxy config file not found at $proxyConfigFilePath, reading configuration from env.")
             ConfigurationFile.fromEnv()
         }
+    // Configuration.toString() redacts credentials (e.g. the Redis URI password).
     log.info("Using configuration: ${configFile.configuration}")
     /*
      * Initialize and start the evaluation proxy.
@@ -79,6 +77,20 @@ fun main() {
             configuration = configFile.configuration,
             metricsHandler = PrometheusMetrics(prometheus, true),
         )
+
+    /*
+     * Shut the proxy down gracefully on SIGTERM/SIGINT (e.g. kubernetes pod termination).
+     * This replaces the previous unauthenticated HTTP /shutdown endpoint.
+     */
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            try {
+                runBlocking { evaluationProxy.shutdown() }
+            } catch (t: Throwable) {
+                log.error("Error during evaluation proxy shutdown", t)
+            }
+        },
+    )
 
     /*
      * Start the prometheus metrics server.
@@ -119,17 +131,6 @@ fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
     install(ContentNegotiation) {
         json(json)
     }
-    install(
-        createApplicationPlugin("shutdown") {
-            val plugin = ShutDownUrl("/shutdown", exitCode = { 0 })
-            onCall { call ->
-                if (call.request.uri == plugin.url) {
-                    evaluationProxy.shutdown()
-                    plugin.doShutdown(call)
-                }
-            }
-        },
-    )
 
     /*
      * Configure endpoints.
@@ -213,8 +214,9 @@ suspend fun ApplicationCall.evaluate(
     val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
+    val tracksAssignment = request.getTracksAssignment()
     val tracksExposure = request.getTracksExposure()
-    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure)
+    val result = evaluationProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment)
     respond(result.status, result.body)
 }
 
@@ -226,8 +228,9 @@ suspend fun ApplicationCall.evaluateV1(
     val deploymentKey = request.headers.getDeploymentKey()
     val user = request.userProvider()
     val flagKeys = request.getFlagKeys()
+    val tracksAssignment = request.getTracksAssignment()
     val tracksExposure = request.getTracksExposure()
-    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure)
+    val result = evaluationProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment)
     respond(result.status, result.body)
 }
 
@@ -270,36 +273,68 @@ internal fun Headers.getApiAndSecretKey(): Pair<String?, String?> {
 }
 
 /**
+ * Get the tracksAssignment option from the request header.
+ * When true, an assignment event is sent to Amplitude for the evaluation.
+ *
+ * Header: X-Amp-Exp-Track with values "track" or "no-track"
+ * Defaults to true (track) if header is not set or has an unknown value,
+ * matching Amplitude's remote evaluation behavior.
+ */
+@VisibleForTesting
+internal fun Headers.getTracksAssignment(): Boolean {
+    return when (this["X-Amp-Exp-Track"]?.trim()?.lowercase()) {
+        "no-track" -> false
+        else -> true
+    }
+}
+
+private fun ApplicationRequest.getTracksAssignment(): Boolean = this.headers.getTracksAssignment()
+
+/**
  * Get the tracksExposure option from the request header.
  * When true, exposure events will be sent to Amplitude.
  *
  * Header: X-Amp-Exp-Exposure-Track with values "track" or "no-track"
  * Defaults to false (no-track) if header is not set or has an unknown value.
  */
-private fun ApplicationRequest.getTracksExposure(): Boolean {
-    val headerValue = this.headers["X-Amp-Exp-Exposure-Track"]
-    return when (headerValue) {
+@VisibleForTesting
+internal fun Headers.getTracksExposure(): Boolean {
+    return when (this["X-Amp-Exp-Exposure-Track"]?.trim()?.lowercase()) {
         "track" -> true
         "no-track" -> false
         else -> false // Default to no-track if header not set or unknown value
     }
 }
 
+private fun ApplicationRequest.getTracksExposure(): Boolean = this.headers.getTracksExposure()
+
 /**
  * Get the flag keys from the request. Either contained in header or query params.
  * Flag keys are used to filter the results to only required flags.
+ *
+ * Query parameter: `flag_keys` (comma separated), as documented in the Evaluation
+ * API. The legacy singular `flag_key` is still accepted for backwards compatibility.
  */
-private fun ApplicationRequest.getFlagKeys(): Set<String> {
+@VisibleForTesting
+internal fun getFlagKeys(
+    headerFlagKeys: String?,
+    queryParameterFlagKeys: String?,
+): Set<String> {
     val flagKeys: MutableSet<String> = mutableSetOf()
-    val headerFlagKeys = call.request.headers["X-Amp-Exp-Flag-Keys"]
-    val queryParameterFlagKeys = call.request.queryParameters["flag_key"]
     if (headerFlagKeys != null) {
         val flagKeysJson = Base64.getDecoder().decode(headerFlagKeys).toString(Charsets.UTF_8)
         flagKeys += json.decodeFromString<Set<String>>(flagKeysJson)
     } else if (queryParameterFlagKeys != null) {
-        flagKeys += queryParameterFlagKeys.split(",")
+        flagKeys += queryParameterFlagKeys.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     }
     return flagKeys
+}
+
+private fun ApplicationRequest.getFlagKeys(): Set<String> {
+    val headerFlagKeys = this.headers["X-Amp-Exp-Flag-Keys"]
+    val queryParameterFlagKeys =
+        this.queryParameters["flag_keys"] ?: this.queryParameters["flag_key"]
+    return getFlagKeys(headerFlagKeys, queryParameterFlagKeys)
 }
 
 /**

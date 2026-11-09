@@ -14,6 +14,7 @@ import com.amplitude.project.ProjectStorage
 import com.amplitude.project.getProjectStorage
 import com.amplitude.util.json
 import com.amplitude.util.logger
+import com.amplitude.util.redacted
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
@@ -133,7 +134,7 @@ class EvaluationProxy internal constructor(
             apiKeysToProject[project.apiKey] = project
             secretKeysToProject[project.secretKey] = project
             for (deployment in deployments) {
-                log.debug("Mapping deployment {} project {}", deployment.key, project.id)
+                log.debug("Mapping deployment {} project {}", deployment.key.redacted(), project.id)
                 deploymentKeysToProject[deployment.key] = project
             }
             // Create a project proxy and add the project to storage.
@@ -272,6 +273,7 @@ class EvaluationProxy internal constructor(
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
         tracksExposure: Boolean = false,
+        tracksAssignment: Boolean = true,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -287,7 +289,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure)
+                projectProxy.evaluate(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment)
             }
         }
 
@@ -296,6 +298,7 @@ class EvaluationProxy internal constructor(
         user: Map<String, Any?>?,
         flagKeys: Set<String>? = null,
         tracksExposure: Boolean = false,
+        tracksAssignment: Boolean = true,
     ): EvaluationProxyResponse =
         Metrics.wrapRequestMetric({ EvaluationProxyEvaluationRequest }, { EvaluationProxyEvaluationRequestError(it) }) {
             val project =
@@ -311,7 +314,7 @@ class EvaluationProxy internal constructor(
                         "Project proxy not found for project.",
                     )
             return@wrapRequestMetric Metrics.with({ Evaluation }, { e -> EvaluationFailure(e) }) {
-                projectProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure)
+                projectProxy.evaluateV1(deploymentKey, user, flagKeys, tracksExposure, tracksAssignment)
             }
         }
 
@@ -324,9 +327,10 @@ class EvaluationProxy internal constructor(
             }
         if (project == null) {
             log.warn(
-                "Unable to find project for deployment {}. Current mappings: {}",
-                deploymentKey,
-                deploymentKeysToProject.mapValues { it.value.id },
+                "Unable to find project for deployment {}. Known deployments: {}, projects: {}",
+                deploymentKey.redacted(),
+                deploymentKeysToProject.size,
+                deploymentKeysToProject.values.map { it.id }.toSet(),
             )
             return null
         }
@@ -342,7 +346,11 @@ class EvaluationProxy internal constructor(
                 apiKeysToProject[apiKey]
             }
         if (project == null) {
-            log.warn("Unable to find project for api key {}. Current mappings: {}", apiKey, apiKeysToProject.mapValues { it.value.id })
+            log.warn(
+                "Unable to find project for api key {}. Known projects: {}",
+                apiKey.redacted(),
+                apiKeysToProject.values.map { it.id }.toSet(),
+            )
             return null
         }
         if (project.secretKey != secretKey) {
