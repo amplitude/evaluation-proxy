@@ -6,7 +6,9 @@ import com.amplitude.util.json
 import com.amplitude.util.logger
 import com.amplitude.util.stringEnv
 import com.amplitude.util.toAnyMap
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -22,14 +24,17 @@ import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.receiveText
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.decodeBase64String
+import io.ktor.utils.io.writeFully
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.annotations.VisibleForTesting
@@ -151,11 +156,7 @@ fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
             val result = evaluationProxy.getCohort(apiKey, secretKey, cohortId, lastModified, maxCohortSize)
             when (result.status) {
                 HttpStatusCode.OK -> {
-                    result.bytes?.let { gz ->
-                        call.response.headers.append("Content-Type", "application/json")
-                        call.response.headers.append("Content-Encoding", "gzip")
-                        call.respondBytes(gz)
-                    }
+                    result.bytes?.let { gz -> call.respondGzippedJson(gz) }
                 }
                 else -> call.respond(result.status, result.body)
             }
@@ -201,6 +202,52 @@ fun Application.proxyServer(evaluationProxy: EvaluationProxy) {
 
         get("/status") {
             call.respond("OK")
+        }
+    }
+}
+
+/**
+ * Write size for [respondGzippedJson]. Each streaming response still buffers up to ~1 MiB in its
+ * Ktor response channel before the writer suspends, so the number of concurrent streams is capped
+ * by [gzippedJsonWritePermits] as well.
+ */
+private const val GZIPPED_JSON_WRITE_CHUNK_BYTES = 64 * 1024
+
+/**
+ * Maximum number of cohort blobs streamed concurrently. Bounds total response buffering to roughly
+ * this many MiB however many clients poll at once; further downloads wait for a permit. Enough
+ * concurrent streams to saturate the pod's network, so the cap only queues work the link could not
+ * have delivered any sooner.
+ */
+private const val MAX_CONCURRENT_GZIPPED_JSON_WRITES = 128
+
+private val gzippedJsonWritePermits = Semaphore(MAX_CONCURRENT_GZIPPED_JSON_WRITES)
+
+/**
+ * Respond with a pre-gzipped JSON payload (a cached cohort blob) streamed in
+ * [GZIPPED_JSON_WRITE_CHUNK_BYTES] chunks.
+ *
+ * Do not use respondBytes here: it hands Netty the whole payload as one message, which Netty copies
+ * into a new direct buffer of the full payload size and holds until the client has read it all. Cohort
+ * blobs are multi-MB and shared across requests, so when clients drain slower than they arrive (a
+ * cohort polling spike over a saturated pod network) every in-flight download pins its own off-heap
+ * copy. That exhausts MaxDirectMemorySize, after which each allocation calls System.gc() and sleeps
+ * on the Netty event loop, stalling every endpoint including /status until the liveness probe kills
+ * the pod. Streaming suspends the writer while the socket is backed up, so memory per in-flight
+ * download no longer scales with blob size, and [gzippedJsonWritePermits] bounds how many buffer
+ * at once.
+ */
+internal suspend fun ApplicationCall.respondGzippedJson(gz: ByteArray) {
+    response.headers.append(HttpHeaders.ContentEncoding, "gzip")
+    respondBytesWriter(ContentType.Application.Json, HttpStatusCode.OK, gz.size.toLong()) {
+        gzippedJsonWritePermits.withPermit {
+            var offset = 0
+            while (offset < gz.size) {
+                val end = minOf(offset + GZIPPED_JSON_WRITE_CHUNK_BYTES, gz.size)
+                writeFully(gz, offset, end)
+                flush()
+                offset = end
+            }
         }
     }
 }
