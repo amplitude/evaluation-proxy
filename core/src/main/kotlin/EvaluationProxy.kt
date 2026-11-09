@@ -382,7 +382,7 @@ class EvaluationProxy internal constructor(
                 configuration.analyticsServerUrl,
                 configuration.exposure,
             )
-        val deploymentStorage = getDeploymentStorage(project.id, configuration.redis)
+        val deploymentStorage = getDeploymentStorage(project.id, configuration.redis, configuration.flagCacheTtlMillis)
         val cohortStorage =
             getCohortStorage(
                 project.id,

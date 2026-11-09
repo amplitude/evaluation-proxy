@@ -96,6 +96,11 @@ data class Configuration(
     val exposure: ExposureConfiguration = ExposureConfiguration(),
     val redis: RedisConfiguration? = null,
     val metrics: MetricsConfiguration = MetricsConfiguration(),
+    /**
+     * How long flag configs read from Redis are served from proxy memory before
+     * being re-read. Reduces Redis load on the evaluation path. 0 disables.
+     */
+    val flagCacheTtlMillis: Long = Default.FLAG_CACHE_TTL_MILLIS,
 ) {
     companion object {
         fun fromEnv() =
@@ -122,6 +127,7 @@ data class Configuration(
                         Default.COHORT_SYNC_INTERVAL_MILLIS,
                     )!!,
                 maxCohortSize = intEnv(EnvKey.MAX_COHORT_SIZE, Default.MAX_COHORT_SIZE)!!,
+                flagCacheTtlMillis = longEnv(EnvKey.FLAG_CACHE_TTL_MILLIS, Default.FLAG_CACHE_TTL_MILLIS)!!,
                 assignment = AssignmentConfiguration.fromEnv(),
                 exposure = ExposureConfiguration.fromEnv(),
                 redis = RedisConfiguration.fromEnv(),
@@ -307,6 +313,7 @@ object EnvKey {
     const val FLAG_SYNC_INTERVAL_MILLIS = "AMPLITUDE_FLAG_SYNC_INTERVAL_MILLIS"
     const val COHORT_SYNC_INTERVAL_MILLIS = "AMPLITUDE_COHORT_SYNC_INTERVAL_MILLIS"
     const val MAX_COHORT_SIZE = "AMPLITUDE_MAX_COHORT_SIZE"
+    const val FLAG_CACHE_TTL_MILLIS = "AMPLITUDE_FLAG_CACHE_TTL_MILLIS"
 
     const val ASSIGNMENT_FILTER_CAPACITY = "AMPLITUDE_ASSIGNMENT_FILTER_CAPACITY"
     const val ASSIGNMENT_EVENT_UPLOAD_THRESHOLD = "AMPLITUDE_ASSIGNMENT_EVENT_UPLOAD_THRESHOLD"
@@ -352,6 +359,7 @@ object Default {
     const val FLAG_SYNC_INTERVAL_MILLIS = 60 * 1000L
     const val COHORT_SYNC_INTERVAL_MILLIS = 60 * 2 * 1000L
     const val MAX_COHORT_SIZE = Int.MAX_VALUE
+    const val FLAG_CACHE_TTL_MILLIS = 5000L
 
     const val ASSIGNMENT_FILTER_CAPACITY = 1 shl 20
     const val ASSIGNMENT_EVENT_UPLOAD_THRESHOLD = 100

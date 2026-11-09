@@ -68,7 +68,7 @@ internal class ProjectProxy(
         if (deploymentKey.isNullOrEmpty()) {
             return EvaluationProxyResponse.error(HttpStatusCode.Unauthorized, "Invalid deployment")
         }
-        val result = deploymentStorage.getAllFlags(deploymentKey).values.toList()
+        val result = deploymentStorage.getAllFlagsCached(deploymentKey).values.toList()
         return EvaluationProxyResponse.error(HttpStatusCode.OK, json.encodeToString(result))
     }
 
@@ -157,7 +157,7 @@ internal class ProjectProxy(
         tracksExposure: Boolean = false,
     ): Map<String, EvaluationVariant> {
         // Get flag configs for the deployment from storage and topo sort.
-        val storageFlags = deploymentStorage.getAllFlags(deploymentKey)
+        val storageFlags = deploymentStorage.getAllFlagsCached(deploymentKey)
         if (storageFlags.isEmpty()) {
             return mapOf()
         }
