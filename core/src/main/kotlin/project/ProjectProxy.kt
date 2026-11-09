@@ -177,15 +177,16 @@ internal class ProjectProxy(
         }
         // Flags in remote evaluation mode cannot be evaluated by the proxy: the
         // flag server only returns a default stub for them (no targeting rules).
-        // They are kept for dependency resolution but omitted from the result,
-        // rather than answering with the stub's default as if it were a decision.
+        // The stub's default variant is still returned, matching local evaluation
+        // in the SDKs, but no assignment or exposure is tracked for these flags so
+        // the proxy cannot overwrite results from Amplitude's remote evaluation.
         val remoteFlagKeys = flags.filter { it.isRemoteEvaluationMode() }.map { it.key }.toSet()
         for (remoteFlagKey in remoteFlagKeys) {
             Metrics.track(RemoteEvaluationFlagSkipped)
             if (warnedRemoteFlagKeys.add(remoteFlagKey)) {
                 log.warn(
                     "Flag {} is configured for remote evaluation and cannot be evaluated by the " +
-                        "evaluation proxy; it is omitted from local evaluation results. projectId={}",
+                        "evaluation proxy; its default variant is returned and it is not tracked. projectId={}",
                     remoteFlagKey,
                     project.id,
                 )
@@ -217,20 +218,18 @@ internal class ProjectProxy(
         val evaluationContext = enrichedUser.toEvaluationContext()
         // Evaluate results
         log.debug("evaluate - context={}", evaluationContext)
-        val result =
-            engine.evaluate(evaluationContext, flags).let { evaluated ->
-                if (remoteFlagKeys.isEmpty()) evaluated else evaluated.filterKeys { it !in remoteFlagKeys }
-            }
-        if (enrichedUser.isNotEmpty() && result.isNotEmpty()) {
+        val result = engine.evaluate(evaluationContext, flags)
+        val trackedResult = if (remoteFlagKeys.isEmpty()) result else result.filterKeys { it !in remoteFlagKeys }
+        if (enrichedUser.isNotEmpty() && trackedResult.isNotEmpty()) {
             coroutineScope {
                 if (tracksAssignment) {
                     launch {
-                        assignmentTracker.track(Assignment(evaluationContext, result))
+                        assignmentTracker.track(Assignment(evaluationContext, trackedResult))
                     }
                 }
                 if (tracksExposure) {
                     launch {
-                        exposureTracker.track(Exposure(evaluationContext, result))
+                        exposureTracker.track(Exposure(evaluationContext, trackedResult))
                     }
                 }
             }

@@ -5,6 +5,9 @@ import com.amplitude.assignment.Assignment
 import com.amplitude.assignment.AssignmentTracker
 import com.amplitude.cohort.InMemoryCohortStorage
 import com.amplitude.deployment.InMemoryDeploymentStorage
+import com.amplitude.experiment.evaluation.EvaluationFlag
+import com.amplitude.experiment.evaluation.EvaluationSegment
+import com.amplitude.experiment.evaluation.EvaluationVariant
 import com.amplitude.exposure.Exposure
 import com.amplitude.exposure.ExposureTracker
 import com.amplitude.project.ProjectProxy
@@ -33,7 +36,7 @@ class ProjectProxyTrackingTest {
     private fun proxy(
         assignmentTracker: AssignmentTracker,
         exposureTracker: ExposureTracker,
-        vararg flags: com.amplitude.experiment.evaluation.EvaluationFlag,
+        vararg flags: EvaluationFlag,
     ): ProjectProxy {
         val deploymentStorage =
             InMemoryDeploymentStorage().apply {
@@ -104,8 +107,27 @@ class ProjectProxyTrackingTest {
             coVerify(exactly = 1) { exposureTracker.track(any()) }
         }
 
+    // Shape of what the flag server returns for a remote evaluation mode flag: variants,
+    // a single "everyone -> off" segment and evaluationMode=remote, but no targeting rules.
+    private fun remoteStub(key: String) =
+        EvaluationFlag(
+            key = key,
+            variants =
+                mapOf(
+                    "off" to EvaluationVariant("off", null, null, mapOf("default" to true)),
+                    "treatment" to EvaluationVariant("treatment", "treatment", null, null),
+                ),
+            segments = listOf(EvaluationSegment(variant = "off", metadata = mapOf("segmentName" to "default"))),
+            metadata = mapOf("evaluationMode" to "remote", "flagType" to "release", "flagVersion" to 11, "deployed" to true),
+        )
+
+    private fun variantKeyOf(
+        body: String,
+        flagKey: String,
+    ): String? = ((Json.parseToJsonElement(body) as JsonObject)[flagKey] as? JsonObject)?.get("key")?.toString()?.trim('"')
+
     @Test
-    fun `remote evaluation mode flag is omitted from result and tracking`(): Unit =
+    fun `remote evaluation mode flag returns its default like the SDKs but is not tracked`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
             val exposureTracker = mockk<ExposureTracker>()
@@ -114,12 +136,14 @@ class ProjectProxyTrackingTest {
             coEvery { assignmentTracker.track(capture(assignmentSlot)) } returns Unit
             coEvery { exposureTracker.track(capture(exposureSlot)) } returns Unit
             val localFlag = flag("local", metadata = mapOf("evaluationMode" to "local", "flagVersion" to 1))
-            val remoteFlag = flag("remote", metadata = mapOf("evaluationMode" to "remote", "flagVersion" to 1))
-            val projectProxy = proxy(assignmentTracker, exposureTracker, localFlag, remoteFlag)
+            val projectProxy = proxy(assignmentTracker, exposureTracker, localFlag, remoteStub("remote"))
 
             val result = projectProxy.evaluate(deployment.key, user, null, tracksExposure = true)
             assertEquals(HttpStatusCode.OK, result.status)
-            assertEquals(setOf("local"), keysOf(result.body))
+            // Response matches local evaluation in the SDKs: the stub's default is returned.
+            assertEquals(setOf("local", "remote"), keysOf(result.body))
+            assertEquals("off", variantKeyOf(result.body, "remote"))
+            // Tracking excludes the remote flag so the proxy cannot overwrite Amplitude's results.
             assertTrue(assignmentSlot.isCaptured)
             assertEquals(setOf("local"), assignmentSlot.captured.results.keys)
             assertTrue(exposureSlot.isCaptured)
@@ -127,17 +151,18 @@ class ProjectProxyTrackingTest {
         }
 
     @Test
-    fun `remote evaluation mode flag requested explicitly returns empty and tracks nothing`(): Unit =
+    fun `remote evaluation mode flag requested alone returns its default and tracks nothing`(): Unit =
         runBlocking {
             val assignmentTracker = mockk<AssignmentTracker>()
             val exposureTracker = mockk<ExposureTracker>()
-            val remoteFlag = flag("remote", metadata = mapOf("evaluationMode" to "remote", "flagVersion" to 1))
-            val projectProxy = proxy(assignmentTracker, exposureTracker, flag("local"), remoteFlag)
+            val projectProxy = proxy(assignmentTracker, exposureTracker, flag("local"), remoteStub("remote"))
 
-            val result = projectProxy.evaluate(deployment.key, user, setOf("remote"))
+            val result = projectProxy.evaluate(deployment.key, user, setOf("remote"), tracksExposure = true)
             assertEquals(HttpStatusCode.OK, result.status)
-            assertEquals("{}", result.body)
+            assertEquals(setOf("remote"), keysOf(result.body))
+            assertEquals("off", variantKeyOf(result.body, "remote"))
             coVerify(exactly = 0) { assignmentTracker.track(any()) }
+            coVerify(exactly = 0) { exposureTracker.track(any()) }
         }
 
     @Test

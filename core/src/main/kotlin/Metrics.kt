@@ -13,9 +13,10 @@ data object Evaluation : Metric()
 data class EvaluationFailure(val exception: Exception) : FailureMetric()
 
 /**
- * A flag configured for remote evaluation was present in the deployment and
- * omitted from a local evaluation result. The proxy cannot evaluate remote
- * evaluation mode flags; the flag server only returns a default stub for them.
+ * A flag configured for remote evaluation was part of a local evaluation. The
+ * proxy cannot evaluate remote evaluation mode flags (the flag server only
+ * returns a default stub for them), so it returns the stub's default variant
+ * and does not track an assignment or exposure for the flag.
  */
 data object RemoteEvaluationFlagSkipped : Metric()
 

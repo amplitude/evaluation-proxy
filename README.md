@@ -44,7 +44,7 @@ Individual endpoints can still be overridden with `serverUrl`, `cohortServerUrl`
 
 ### Remote evaluation mode flags
 
-The proxy performs local evaluation only. Flags configured for **remote** evaluation mode are returned by Amplitude without targeting rules, so the proxy cannot evaluate them. They are omitted from `/sdk/vardata`, `/sdk/v2/vardata` and `/v1/vardata` responses (a warning is logged once per flag and the `amplitude_proxy_remote_evaluation_flag_skipped_total` metric is incremented) rather than being answered with their default variant. Evaluate such flags against Amplitude's remote evaluation endpoints directly.
+The proxy performs local evaluation only. Flags configured for **remote** evaluation mode are returned by Amplitude without targeting rules, so the proxy cannot evaluate them. As with local evaluation in the SDKs, the proxy returns their default variant, but it does not track assignment or exposure events for them. A warning is logged once per flag and the `amplitude_proxy_remote_evaluation_flag_skipped_total` metric is incremented. Evaluate such flags against Amplitude's remote evaluation endpoints directly.
 
 ### Tracking headers
 
